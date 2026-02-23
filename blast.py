@@ -19,8 +19,7 @@ def build_makeblastdb_command(fasta_file: str, db_dir: str, params: Dict[str, An
         "makeblastdb",
         "-in", fasta_file,
         "-dbtype", str(params["dbtype"]),
-        "-out", db_prefix,
-        "-num_threads", str(params["num_threads"])
+        "-out", db_prefix
     ]
     return cmd, db_prefix
 
@@ -43,7 +42,6 @@ def build_blastp_command(query_fasta: str, sub_db_prefix: str, output_file: str,
         "-outfmt", str(params["outfmt"]),
         "-evalue", str(params["evalue"]),
         "-word_size", str(params["word_size"]),
-        "-perc_identity", str(params["min_identity_percentage"]),
         "-max_target_seqs", str(params["max_target_seqs"]),
         "-num_threads", str(params["num_threads"])
     ]

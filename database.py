@@ -1,4 +1,6 @@
 import pandas as pd
+import numpy as np
+from typing import List
 
 def fetch_proteins(contig_id: int, conn) -> pd.DataFrame:
     """
@@ -42,3 +44,28 @@ def fetch_amr_for_proteins(protein_ids: List[str], conn) -> pd.DataFrame:
     cursor.execute(query, protein_ids)
     rows = cursor.fetchall()
     return pd.DataFrame(rows)
+
+def fetch_replicons_from_plasann(contig_id: str, conn) -> pd.DataFrame:
+    """
+    Fetch replicon information for a given contig_ID from the MySQL database and return it as a pandas DataFrame.
+    Args:
+        contig_id (str): The ID of the contig to fetch replicon information for.
+        conn: A MySQL database connection object.
+    Returns:
+        pd.DataFrame: A DataFrame containing the replicon information for the given contig_ID.
+    """
+    cursor = conn.cursor(dictionary=True)
+    query = """
+    SELECT id, kes2021_id, contig_ID, start, end, product, gene_name
+    FROM plasann_kes2021.proteins
+    WHERE contig_ID = %s
+        AND product = "Predicted replicon"
+    """
+    cursor.execute(query,(int(contig_id),))
+    rows = cursor.fetchall()
+    if not rows:
+        return pd.DataFrame(columns=['id', 'kes2021_id', 'contig_ID', 'start', 'end', 'product', 'gene_name'])
+    df = pd.DataFrame(rows)
+    df['start'] = df['start'].astype(int)
+    df['end'] = df['end'].astype(int)
+    return df
