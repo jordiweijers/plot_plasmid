@@ -14,7 +14,7 @@ from plot_plasmid.parse import parse_blast_output
 from plot_plasmid.plot import plot_contigs
 
 CONTIG_IDS = [1732, 2823, 2591]
-OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/contig_{'_'.join(map(str, CONTIG_IDS))}.svg"
+OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/contig_{'_'.join(map(str, CONTIG_IDS))}.svg"
 ARO_INDEX_FILE = "/zfshome/sunam274/compare_plasmids/card-data/aro_index.tsv"
 
 DB_CONFIG = {

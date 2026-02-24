@@ -54,7 +54,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     text_kws={"size": 5},
                     facecolor=color,
                     edgecolor=WRAP_COLOR,
-                    linewidth=0.5,
+                    lw=0.5,
                     )
                 track.add_feature(
                     start=0, end=row['end'],
@@ -64,7 +64,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     text_kws={"size": 5},
                     facecolor=color,
                     edgecolor=WRAP_COLOR,
-                    linewidth=0.5,
+                    lw=0.5,
                     )
             else:
                 track.add_feature(
