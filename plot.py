@@ -3,8 +3,9 @@ import pandas as pd
 from typing import List, Dict, Tuple
 
 AMR_COLOR = "#33ffff"
-REP_COLOR = "#d81159"
+REP_COLOR = "#5e2bff"
 DEF_COLOR = "#ff8800"
+WRAP_COLOR = "#ff0000"
 
 def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_results: Dict[Tuple[int, int], pd.DataFrame], min_identity: float, output_file: str):
     """
@@ -19,6 +20,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
         None
     """
     gv = GenomeViz(track_align_type = "center")
+    gv.set_scale_bar(ymargin=0.5)
     track_dict = {}
     # ---------- Create tracks for each contig ----------
     for contig_id in contig_ids:
@@ -27,6 +29,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
         name = f"Contig {contig_id}"
         track = gv.add_feature_track(name, genome_size)
         track_dict[contig_id] = track
+        
 
     # ---------- Add features to tracks ----------
     for contig_id, track in track_dict.items():
@@ -41,37 +44,45 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
             else:
                 color = DEF_COLOR
             strand = 1 if row['strand'] == '+' else -1
-            if row['start'] > row['end']:  # wrap-around for circular genome
+            is_wrap = row['start'] > row['end'] # wrap around for circular contigs
+            if is_wrap: 
                 track.add_feature(
                     start=row['start'], end=int(contig_df[['start', 'end']].max().max()),
                     strand=strand,
                     plotstyle="bigarrow",
-                    label=row['replicon'] if is_replicon else (row['ARO Name'] if is_amr else None),
+                    label=row['replicon'] if is_replicon else None,
                     text_kws={"size": 5},
-                    facecolor=color 
+                    facecolor=color,
+                    edgecolor=WRAP_COLOR,
+                    linewidth=0.5,
                     )
                 track.add_feature(
                     start=0, end=row['end'],
                     strand=strand,
                     plotstyle="bigarrow",
-                    label=row['replicon'] if is_replicon else (row['ARO Name'] if is_amr else None),
+                    label=row['replicon'] if is_replicon else None,
                     text_kws={"size": 5},
-                    facecolor=color
+                    facecolor=color,
+                    edgecolor=WRAP_COLOR,
+                    linewidth=0.5,
                     )
             else:
                 track.add_feature(
                     start=row['start'], end=row['end'],
                     strand=strand,
                     plotstyle="bigarrow",
-                    label=row['replicon'] if is_replicon else (row['ARO Name'] if is_amr else None),
+                    label=row['replicon'] if is_replicon else None,
                     text_kws={"size": 5},
-                    facecolor=color
+                    facecolor=color,
                     )
 
     # ---------- Add links for BLAST hits ----------
     if blast_results:
         for (query, subject), blast_df in blast_results.items():
             filtered_blast_df = blast_df[blast_df['pident'] >= min_identity]  # Filter for high identity hits
+            if filtered_blast_df.empty:
+                continue
+            vmin = filtered_blast_df['pident'].min()
             for _, hit in filtered_blast_df.iterrows():
                 try:
                     q_row = all_contigs_df[
@@ -84,18 +95,30 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     ].iloc[0]
                 except IndexError:
                     continue
-                gv.add_link(
-                    target1=(f"Contig {query}", q_row['start'], q_row['end']),
-                    target2=(f"Contig {subject}", s_row['start'], s_row['end']),
-                    color="grey",
-                    v=hit['pident'],
-                    vmin=filtered_blast_df['pident'].min(),
-                    vmax=100,
-                    curve=True
-                )
-                gv.set_colorbar(
-                    colors=["grey", "grey"],
-                    vmin=filtered_blast_df['pident'].min(),
-                    vmax=100,
-                )
+                q_wrap = q_row['start'] > q_row['end']
+                s_wrap = s_row['start'] > s_row['end']
+                q_size = int(all_contigs_df[all_contigs_df['contig_ID'] == query][['start', 'end']].max().max())
+                s_size = int(all_contigs_df[all_contigs_df['contig_ID'] == subject][['start', 'end']].max().max())
+                def wrap_segments(row, size):
+                    if row['start'] <= row['end']:
+                        yield (row['start'], row['end'])
+                    else:
+                        yield (row['start'], size)
+                        yield (0, row['end'])
+                for q_seg_start, q_seg_end in wrap_segments(q_row, q_size):
+                    for s_seg_start, s_seg_end in wrap_segments(s_row, s_size):
+                        gv.add_link(
+                            target1=(f"Contig {query}", q_seg_start, q_seg_end),
+                            target2=(f"Contig {subject}", s_seg_start, s_seg_end),
+                            color="grey",
+                            v=hit['pident'],
+                            vmin=vmin,
+                            vmax=100,
+                            curve=True
+                        )
+            gv.set_colorbar(
+                colors=["grey", "grey"],
+                vmin=vmin,
+                vmax=100,
+            )
     gv.savefig(output_file)

@@ -5,6 +5,7 @@ from typing import List, Dict
 import os
 from time import time
 import numpy as np
+import argparse
 
 from plot_plasmid.utils import setup_logging, run_command
 from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_replicons_from_plasann
@@ -12,8 +13,9 @@ from plot_plasmid.blast import build_makeblastdb_command, build_blastp_command
 from plot_plasmid.parse import parse_blast_output
 from plot_plasmid.plot import plot_contigs
 
-CONTIG_IDS = [3524, 2721, 2617]
+CONTIG_IDS = [1732, 2823, 2591]
 OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/contig_{'_'.join(map(str, CONTIG_IDS))}.svg"
+ARO_INDEX_FILE = "/zfshome/sunam274/compare_plasmids/card-data/aro_index.tsv"
 
 DB_CONFIG = {
     "host": "localhost",
@@ -102,10 +104,28 @@ def assign_replicons_to_proteins(proteins_df: pd.DataFrame, replicons_df: pd.Dat
         proteins_df.loc[closest_idx, 'replicon'] = replicon['gene_name']
     return proteins_df
 
+def parse_arguments():
+    """
+    Parse command-line arguments.
+    Returns:
+        argparse.Namespace: The parsed arguments.
+    """
+    parser = argparse.ArgumentParser(description="Plot plasmid contigs with PyGenomeViz")
+    parser.add_argument(
+        "-c", "--contig_ids", type=int, nargs="+", default=CONTIG_IDS, help="List of contig IDs to plot (space-separated)"
+    )
+    parser.add_argument(
+        "-o", "--output_file", type=str, default=OUTPUT_FILE, help="Output file path for the plot (e.g. contigs.svg)"
+    )
+    return parser.parse_args()
+
 def main():
+    args = parse_arguments()
+    CONTIG_IDS = args.contig_ids
+    OUTPUT_FILE = args.output_file
     logger = setup_logging(os.path.join(LOG_DIR, f"plot_plasmid_{int(time())}.log"))
     conn = mysql.connector.connect(**DB_CONFIG)
-    aro_index_df = load_aro_index("/zfshome/sunam274/compare_plasmids/card-data/aro_index.tsv")
+    aro_index_df = load_aro_index(ARO_INDEX_FILE)
     all_contigs_df = pd.DataFrame()
     faa_paths = {}
     db_prefixes = {}
