@@ -43,29 +43,30 @@ def fetch_amr_for_proteins(protein_ids: List[str], conn) -> pd.DataFrame:
     """
     cursor.execute(query, protein_ids)
     rows = cursor.fetchall()
+    if not  rows:
+        raise ValueError("No AMR information found for the provided protein IDs.")
     return pd.DataFrame(rows)
 
-def fetch_replicons_from_plasann(contig_id: str, conn) -> pd.DataFrame:
+def fetch_mcl_for_proteins(protein_ids: List[str], conn) -> pd.DataFrame:
     """
-    Fetch replicon information for a given contig_ID from the MySQL database and return it as a pandas DataFrame.
+    Fetch MCL cluster information for a list of protein IDs from the MySQL database and return it as a pandas DataFrame.
     Args:
-        contig_id (str): The ID of the contig to fetch replicon information for.
+        protein_ids (List[str]): A list of protein IDs to fetch MCL cluster information for.
         conn: A MySQL database connection object.
     Returns:
-        pd.DataFrame: A DataFrame containing the replicon information for the given contig_ID.
+        pd.DataFrame: A DataFrame containing the MCL cluster information for the given protein IDs.
     """
+    if not protein_ids:
+        raise ValueError("protein_ids list cannot be empty.")
     cursor = conn.cursor(dictionary=True)
-    query = """
-    SELECT id, kes2021_id, contig_ID, start, end, product, gene_name
-    FROM plasann_kes2021.proteins
-    WHERE contig_ID = %s
-        AND product = "Predicted replicon"
+    placeholders = ', '.join(['%s'] * len(protein_ids))
+    query = f"""
+    SELECT id, clust AS mcl_id
+    FROM mcl30
+    WHERE id IN ({placeholders})
     """
-    cursor.execute(query,(int(contig_id),))
+    cursor.execute(query, protein_ids)
     rows = cursor.fetchall()
     if not rows:
-        return pd.DataFrame(columns=['id', 'kes2021_id', 'contig_ID', 'start', 'end', 'product', 'gene_name'])
-    df = pd.DataFrame(rows)
-    df['start'] = df['start'].astype(int)
-    df['end'] = df['end'].astype(int)
-    return df
+        raise ValueError("No MCL cluster information found for the provided protein IDs.")
+    return pd.DataFrame(rows)

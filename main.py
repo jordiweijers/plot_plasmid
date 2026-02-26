@@ -8,14 +8,15 @@ import numpy as np
 import argparse
 
 from plot_plasmid.utils import setup_logging, run_command
-from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_replicons_from_plasann
+from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_mcl_for_proteins
 from plot_plasmid.blast import build_makeblastdb_command, build_blastp_command
 from plot_plasmid.parse import parse_blast_output
 from plot_plasmid.plot import plot_contigs
 
 CONTIG_IDS = [1732, 2823, 2591]
-OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/contig_{'_'.join(map(str, CONTIG_IDS))}.svg"
+OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/{'_'.join(map(str, CONTIG_IDS))}.svg"
 ARO_INDEX_FILE = "/zfshome/sunam274/compare_plasmids/card-data/aro_index.tsv"
+REPLICON_MCL_FILE = "/zfshome/sunam274/compare_plasmids/replicon_mcl.csv"
 
 DB_CONFIG = {
     "host": "localhost",
@@ -58,6 +59,18 @@ def load_aro_index(file_path: str) -> pd.DataFrame:
     df['ARO Accession'] = df['ARO Accession'].str.replace("ARO:", "").astype(int)
     return df
 
+def load_replicon_mcl(file_path: str) -> pd.DataFrame:
+    """
+    Load the replicon MCL data from a CSV file and return it as a pandas DataFrame.
+    Args:
+        file_path (str): The path to the replicon MCL CSV file.
+    Returns:
+        pd.DataFrame: A DataFrame containing the replicon MCL data.
+    """
+    df = pd.read_csv(file_path)
+    df['mcl_id'] = df['mcl_id'].astype(int)
+    return df
+
 def write_fasta(sequences: Dict[str, str], output_file: str):
     """
     Write a dictionary of sequences and corresponding headers to a FASTA file.
@@ -68,41 +81,6 @@ def write_fasta(sequences: Dict[str, str], output_file: str):
     with open(output_file, 'w') as f:
         for header, seq in sequences.items():
             f.write(f">{header}\n{seq}\n")
-
-def assign_replicons_to_proteins(proteins_df: pd.DataFrame, replicons_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Assign replicon from replicons_df to proteins_df.
-    A protein is labeld as replicon if:
-        - Its ID matches rpelicons_df.kes2021_id
-        - Or it is the closest protein to a replicon on the same contig, that does not have a direct match with replicons_df.kes2021_id. This is to account for cases where the replicon prediction may not have been perfectly accurate in terms of start and end positions.
-    Args:
-        proteins_df (pd.DataFrame): A DataFrame containing the proteins to assign replicons to. Must have columns 'id', 'contig_ID', 'start', and 'end'.
-        replicons_df (pd.DataFrame): A DataFrame containing the replicons to assign. Must have columns 'kes2021_id', 'contig_ID', 'start', and 'end'.
-    Returns:
-        pd.DataFrame: A DataFrame containing the proteins with an additional column 'is_replicon' indicating whether each protein is a replicon or not.
-    """
-    proteins_df = proteins_df.copy()
-    proteins_df['replicon'] = pd.NA
-    if replicons_df.empty:
-        return proteins_df
-    # ---------- First assign replicons based on direct ID match ----------
-    direct_replicons = replicons_df[replicons_df['kes2021_id'].notna()]
-    for _, rep in direct_replicons.iterrows():
-        mask = proteins_df['id'] == rep['kes2021_id']
-        proteins_df.loc[mask, 'replicon'] = rep['gene_name']
-    # ---------- Coordinate assignment for reamining replicons ----------
-    coord_replicons = replicons_df[replicons_df['kes2021_id'].isna()]
-    for _, replicon in coord_replicons.iterrows():
-        contig_proteins = proteins_df[proteins_df['contig_ID'] == replicon['contig_ID']]
-        if contig_proteins.empty:
-            continue
-        contig_proteins['distance'] = np.minimum(
-            abs(contig_proteins['start'] - replicon['start']),
-            abs(contig_proteins['end'] - replicon['end'])
-        )
-        closest_idx = contig_proteins['distance'].idxmin()
-        proteins_df.loc[closest_idx, 'replicon'] = replicon['gene_name']
-    return proteins_df
 
 def parse_arguments():
     """
@@ -115,17 +93,21 @@ def parse_arguments():
         "-c", "--contig_ids", type=int, nargs="+", default=CONTIG_IDS, help="List of contig IDs to plot (space-separated)"
     )
     parser.add_argument(
-        "-o", "--output_file", type=str, default=OUTPUT_FILE, help="Output file path for the plot (e.g. contigs.svg)"
+        "-o", "--output_file", type=str, default=None, help="Output file path for the plot (e.g. contigs.svg)"
     )
     return parser.parse_args()
 
 def main():
     args = parse_arguments()
     CONTIG_IDS = args.contig_ids
-    OUTPUT_FILE = args.output_file
+    if not args.output_file:
+        OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/{'_'.join(map(str, CONTIG_IDS))}.svg"
+    else:
+        OUTPUT_FILE = args.output_file
     logger = setup_logging(os.path.join(LOG_DIR, f"plot_plasmid_{int(time())}.log"))
     conn = mysql.connector.connect(**DB_CONFIG)
     aro_index_df = load_aro_index(ARO_INDEX_FILE)
+    replicon_df = load_replicon_mcl(REPLICON_MCL_FILE)
     all_contigs_df = pd.DataFrame()
     faa_paths = {}
     db_prefixes = {}
@@ -133,15 +115,29 @@ def main():
 
         # ---------- Get contig data ----------
         proteins_df = fetch_proteins(contig_id, conn)
-        amr_df = fetch_amr_for_proteins(proteins_df['id'].tolist(), conn)
+        try:
+            amr_df = fetch_amr_for_proteins(proteins_df['id'].tolist(), conn)
+        except Exception as e:
+            logger.error(f"Error fetching AMR data for contig {contig_id}: {e}")
+            amr_df = pd.DataFrame()
         if not amr_df.empty:
             amr_df['ARO'] = amr_df['ARO'].astype(int)
             contig_df = proteins_df.merge(amr_df, how='left', on='id')
             contig_df = contig_df.merge(aro_index_df, how='left', left_on='ARO', right_on='ARO Accession')
         else:
             contig_df = proteins_df.copy()
-        replicons_df = fetch_replicons_from_plasann(contig_id, conn)
-        contig_df = assign_replicons_to_proteins(contig_df, replicons_df)
+        try:
+            mcl_df = fetch_mcl_for_proteins(proteins_df['id'].tolist(), conn)
+        except Exception as e:
+            logger.error(f"Error fetching MCL data for contig {contig_id}: {e}")
+            mcl_df = pd.DataFrame()
+        if not mcl_df.empty:
+            mcl_df['mcl_id'] = mcl_df['mcl_id'].astype(int)
+            mcl_rep_df = replicon_df.merge(mcl_df, how='inner', on='mcl_id')
+            mcl_rep_df = mcl_rep_df.rename(columns={'cluster_name': 'replicon'})
+            contig_df = contig_df.merge(mcl_rep_df[['id', 'replicon', 'mcl_id']], how='left', on='id')
+        else:
+            contig_df = contig_df.copy()
         all_contigs_df = pd.concat([all_contigs_df, contig_df], ignore_index=True)
 
         # ---------- Write FASTA ----------

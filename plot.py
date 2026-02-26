@@ -45,12 +45,13 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                 color = DEF_COLOR
             strand = 1 if row['strand'] == '+' else -1
             is_wrap = row['start'] > row['end'] # wrap around for circular contigs
+            label = f"{str(row['replicon']).split('_')[0]}_{int(row['mcl_id'])}" if is_replicon and pd.notna(row['replicon']) and pd.notna(row['mcl_id']) else None
             if is_wrap: 
                 track.add_feature(
                     start=row['start'], end=int(contig_df[['start', 'end']].max().max()),
                     strand=strand,
                     plotstyle="bigarrow",
-                    label=row['replicon'] if is_replicon else None,
+                    label=label,
                     text_kws={"size": 5},
                     facecolor=color,
                     edgecolor=WRAP_COLOR,
@@ -60,7 +61,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     start=0, end=row['end'],
                     strand=strand,
                     plotstyle="bigarrow",
-                    label=row['replicon'] if is_replicon else None,
+                    label=label,
                     text_kws={"size": 5},
                     facecolor=color,
                     edgecolor=WRAP_COLOR,
@@ -71,7 +72,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     start=row['start'], end=row['end'],
                     strand=strand,
                     plotstyle="bigarrow",
-                    label=row['replicon'] if is_replicon else None,
+                    label=label,
                     text_kws={"size": 5},
                     facecolor=color,
                     )
