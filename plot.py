@@ -4,16 +4,18 @@ from typing import List, Dict, Tuple
 
 AMR_COLOR = "#33ffff"
 REP_COLOR = "#5e2bff"
+PLASANN_COLOR = "#efa0bd"
 DEF_COLOR = "#ff8800"
 WRAP_COLOR = "#ff0000"
 
-def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_results: Dict[Tuple[int, int], pd.DataFrame], min_identity: float, output_file: str):
+def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_results: Dict[Tuple[int, int], pd.DataFrame], plasann_replicons: Dict[int, pd.DataFrame], min_identity: float, output_file: str):
     """
     Plot the contigs using pygenomeviz.
     Args:
         all_contigs_df (pd.DataFrame): A DataFrame containing the merged data for all contigs.
         contig_ids (List[int]): A list of contig IDs to plot.
         blast_results (Dict[Tuple[int, int], pd.DataFrame]): A dictionary containing BLAST results for each contig pair.
+        plasann_replicons (Dict[int, pd.DataFrame]): A dictionary containing PlasAnn replicon data for each contig.
         min_identity (float): Minimum percent identity to consider for plotting BLAST links.
         output_file (str): The path to the output file.
     Returns:
@@ -25,7 +27,13 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
     # ---------- Create tracks for each contig ----------
     for contig_id in contig_ids:
         contig_df = all_contigs_df[all_contigs_df['contig_ID'] == contig_id]
-        genome_size = int(contig_df[['start', 'end']].max().max())
+        cds_max = int(contig_df[['start', 'end']].max().max())
+        rep_df = plasann_replicons.get(contig_id)
+        if rep_df is not None and not rep_df.empty:
+            rep_max = int(rep_df[['start', 'end']].max().max())
+            genome_size = max(cds_max, rep_max)
+        else:
+            genome_size = cds_max
         name = f"Contig {contig_id}"
         track = gv.add_feature_track(name, genome_size)
         track_dict[contig_id] = track
@@ -45,7 +53,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                 color = DEF_COLOR
             strand = 1 if row['strand'] == '+' else -1
             is_wrap = row['start'] > row['end'] # wrap around for circular contigs
-            label = f"{str(row['replicon']).split('_')[0]}_{int(row['mcl_id'])}" if is_replicon and pd.notna(row['replicon']) and pd.notna(row['mcl_id']) else None
+            label = f"{str(row['replicon']).split(' ')[0]}_{int(row['mcl_id'])}" if is_replicon and pd.notna(row['replicon']) and pd.notna(row['mcl_id']) else None
             if is_wrap: 
                 track.add_feature(
                     start=row['start'], end=int(contig_df[['start', 'end']].max().max()),
@@ -76,7 +84,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     text_kws={"size": 5},
                     facecolor=color,
                     )
-
+    
     # ---------- Add links for BLAST hits ----------
     if blast_results:
         for (query, subject), blast_df in blast_results.items():
@@ -122,4 +130,28 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                 vmin=vmin,
                 vmax=100,
             )
-    gv.savefig(output_file)
+    fig = gv.plotfig()
+    if plasann_replicons:
+        for contig_id, track in track_dict.items():
+            rep_df = plasann_replicons.get(contig_id)
+            if rep_df is None or rep_df.empty:
+                continue
+            contig_df = all_contigs_df[all_contigs_df['contig_ID'] == contig_id]
+            genome_size = int(contig_df[['start', 'end']].max().max())
+            for _, row in rep_df.iterrows():
+                start = int(row['start'])
+                end = int(row['end'])
+                label = row['gene_name']
+                def plot_region(start, end):
+                    ts = track.transform_coord(start)
+                    te = track.transform_coord(end)
+                    x, y = (ts, te, te, ts), (-1, -1, 1, 1)
+                    track.ax.fill(x, y, fc = PLASANN_COLOR, alpha=0.5, edgecolor='none', zorder=-1)
+                    text_x, text_y = (ts + te) / 2, - 1.5
+                    track.ax.text(text_x, text_y, s=label, ha='center', va='bottom', size=5, color="black")
+                if start <= end:
+                    plot_region(start, end)
+                else: 
+                    plot_region(start, genome_size)
+                    plot_region(0, end)
+    fig.savefig(output_file)

@@ -70,3 +70,25 @@ def fetch_mcl_for_proteins(protein_ids: List[str], conn) -> pd.DataFrame:
     if not rows:
         raise ValueError("No MCL cluster information found for the provided protein IDs.")
     return pd.DataFrame(rows)
+
+def fetch_replicons_for_contig(contig_id: int, conn) -> pd.DataFrame:
+    """
+    Fetch replicon information for a given contig_ID from the MySQL database and return it as a pandas DataFrame.
+    Args:
+        contig_id (int): The ID of the contig to fetch replicon information for.
+        conn: A MySQL database connection object.
+    Returns:
+        pd.DataFrame: A DataFrame containing the replicon information for the given contig_ID.
+    """
+    cursor = conn.cursor(dictionary=True)
+    query = """
+    SELECT id, contig_ID, category, gene_name, start, end
+    FROM plasann_kes2021.proteins
+    WHERE contig_ID = %s
+        AND category = "Replicon"
+    """
+    cursor.execute(query,(int(contig_id),))
+    rows = cursor.fetchall()
+    if not rows:
+        raise ValueError("No replicon information found for the provided contig_ID.")
+    return pd.DataFrame(rows)

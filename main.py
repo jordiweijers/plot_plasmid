@@ -8,7 +8,7 @@ import numpy as np
 import argparse
 
 from plot_plasmid.utils import setup_logging, run_command
-from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_mcl_for_proteins
+from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_mcl_for_proteins, fetch_replicons_for_contig
 from plot_plasmid.blast import build_makeblastdb_command, build_blastp_command
 from plot_plasmid.parse import parse_blast_output
 from plot_plasmid.plot import plot_contigs
@@ -16,7 +16,7 @@ from plot_plasmid.plot import plot_contigs
 CONTIG_IDS = [1732, 2823, 2591]
 OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/{'_'.join(map(str, CONTIG_IDS))}.svg"
 ARO_INDEX_FILE = "/zfshome/sunam274/compare_plasmids/card-data/aro_index.tsv"
-REPLICON_MCL_FILE = "/zfshome/sunam274/compare_plasmids/replicon_mcl.csv"
+REPLICON_MCL_FILE = "/zfshome/sunam274/compare_plasmids/results/replicon_mcl.csv"
 
 DB_CONFIG = {
     "host": "localhost",
@@ -109,6 +109,7 @@ def main():
     aro_index_df = load_aro_index(ARO_INDEX_FILE)
     replicon_df = load_replicon_mcl(REPLICON_MCL_FILE)
     all_contigs_df = pd.DataFrame()
+    plasann_replicons = {}
     faa_paths = {}
     db_prefixes = {}
     for contig_id in CONTIG_IDS:
@@ -138,6 +139,12 @@ def main():
             contig_df = contig_df.merge(mcl_rep_df[['id', 'replicon', 'mcl_id']], how='left', on='id')
         else:
             contig_df = contig_df.copy()
+        try:
+            plasann_df = fetch_replicons_for_contig(contig_id, conn)
+        except Exception as e:
+            logger.error(f"Error fetching PlasAnn replicon data for contig {contig_id}: {e}")
+            plasann_df = pd.DataFrame()
+        plasann_replicons[contig_id] = plasann_df
         all_contigs_df = pd.concat([all_contigs_df, contig_df], ignore_index=True)
 
         # ---------- Write FASTA ----------
@@ -178,7 +185,7 @@ def main():
         blast_results[(query, subject)] = parse_blast_output(output_file)
 
     # ---------- Plot contigs ----------
-    plot_contigs(all_contigs_df, CONTIG_IDS, blast_results, MIN_IDENTITY,OUTPUT_FILE)
+    plot_contigs(all_contigs_df, CONTIG_IDS, blast_results, plasann_replicons, MIN_IDENTITY, OUTPUT_FILE)
 
 if __name__ == "__main__":
     main()
