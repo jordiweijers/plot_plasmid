@@ -51,6 +51,13 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                 color = AMR_COLOR
             else:
                 color = DEF_COLOR
+            alpha = 1.0
+            edgecolor = None
+            linewidth = 0.0
+            if row['type'] == 'pseudo':
+                alpha = 0.2
+                edgecolor = color
+                linewidth = 0.5
             strand = 1 if row['strand'] == '+' else -1
             is_wrap = row['start'] > row['end'] # wrap around for circular contigs
             label = f"{str(row['replicon']).split(' ')[0]}_{int(row['mcl_id'])}" if is_replicon and pd.notna(row['replicon']) and pd.notna(row['mcl_id']) else None
@@ -63,6 +70,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     text_kws={"size": 5},
                     facecolor=color,
                     edgecolor=WRAP_COLOR,
+                    alpha=alpha,
                     lw=0.5,
                     )
                 track.add_feature(
@@ -73,6 +81,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     text_kws={"size": 5},
                     facecolor=color,
                     edgecolor=WRAP_COLOR,
+                    alpha=alpha,
                     lw=0.5,
                     )
             else:
@@ -83,6 +92,9 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     label=label,
                     text_kws={"size": 5},
                     facecolor=color,
+                    edgecolor=edgecolor,
+                    alpha=alpha,
+                    lw=linewidth,
                     )
     
     # ---------- Add links for BLAST hits ----------
@@ -146,7 +158,7 @@ def plot_contigs(all_contigs_df: pd.DataFrame, contig_ids: List[int], blast_resu
                     ts = track.transform_coord(start)
                     te = track.transform_coord(end)
                     x, y = (ts, te, te, ts), (-1, -1, 1, 1)
-                    track.ax.fill(x, y, fc = PLASANN_COLOR, alpha=0.5, edgecolor='none', zorder=-1)
+                    track.ax.fill(x, y, fc = PLASANN_COLOR, edgecolor='none', zorder=-1)
                     text_x, text_y = (ts + te) / 2, - 1.5
                     track.ax.text(text_x, text_y, s=label, ha='center', va='bottom', size=5, color="black")
                 if start <= end:

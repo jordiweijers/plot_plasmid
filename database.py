@@ -23,6 +23,27 @@ def fetch_proteins(contig_id: int, conn) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     return df
 
+def fetch_pseudogenes(contig_id: int, conn) -> pd.DataFrame:
+    """
+    Fetch all pseudogenes for a given contig_ID from the MySQL database and return them as a pandas DataFrame.
+    Args:
+        contig_id (int): The ID of the contig to fetch pseudogenes for.
+        conn: A MySQL database connection object.
+    Returns:
+        pd.DataFrame: A DataFrame containing the pseudogenes for the given contig_ID.
+    """
+    cursor = conn.cursor(dictionary=True)
+    query = """
+    SELECT *
+    FROM pseudogenes
+    WHERE contig_ID = %s
+    order by start
+    """
+    cursor.execute(query,(int(contig_id),))
+    rows = cursor.fetchall()
+    df = pd.DataFrame(rows)
+    return df
+
 def fetch_amr_for_proteins(protein_ids: List[str], conn) -> pd.DataFrame:
     """
     Fetch AMR information for a list of protein IDs from the MySQL database and return it as a pandas DataFrame.
@@ -69,6 +90,30 @@ def fetch_mcl_for_proteins(protein_ids: List[str], conn) -> pd.DataFrame:
     rows = cursor.fetchall()
     if not rows:
         raise ValueError("No MCL cluster information found for the provided protein IDs.")
+    return pd.DataFrame(rows)
+
+def fetch_mcl_for_pseudogenes(pseudo_ids: List[str], conn) -> pd.DataFrame:
+    """
+    Fetch MCL cluster information for a list of pseudogene IDs from the MySQL database and return it as a pandas DataFrame.
+    Args:
+        pseudo_ids (List[str]): A list of pseudogene IDs to fetch MCL cluster information for.
+        conn: A MySQL database connection object.
+    Returns:
+        pd.DataFrame: A DataFrame containing the MCL cluster information for the given pseudogene IDs.
+    """
+    if not pseudo_ids:
+        raise ValueError("pseudo_ids list cannot be empty.")
+    cursor = conn.cursor(dictionary=True)
+    placeholders = ', '.join(['%s'] * len(pseudo_ids))
+    query = f"""
+    SELECT pseudo_id, clust AS mcl_id
+    FROM pmcl
+    WHERE pseudo_id IN ({placeholders})
+    """
+    cursor.execute(query, pseudo_ids)
+    rows = cursor.fetchall()
+    if not rows:
+        raise ValueError("No MCL cluster information found for the provided pseudogene IDs.")
     return pd.DataFrame(rows)
 
 def fetch_replicons_for_contig(contig_id: int, conn) -> pd.DataFrame:

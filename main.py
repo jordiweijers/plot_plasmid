@@ -8,7 +8,7 @@ import numpy as np
 import argparse
 
 from plot_plasmid.utils import setup_logging, run_command
-from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_mcl_for_proteins, fetch_replicons_for_contig
+from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_mcl_for_proteins, fetch_replicons_for_contig, fetch_pseudogenes, fetch_mcl_for_pseudogenes
 from plot_plasmid.blast import build_makeblastdb_command, build_blastp_command
 from plot_plasmid.parse import parse_blast_output
 from plot_plasmid.plot import plot_contigs
@@ -36,7 +36,7 @@ BLASTP_PARAMS = {
     "num_threads": 1
 }
 
-MIN_IDENTITY = 50.0  
+MIN_IDENTITY = 60.0  
 
 LOG_DIR = "/zfshome/sunam274/compare_plasmids/results/plotting_data/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -115,7 +115,34 @@ def main():
     for contig_id in CONTIG_IDS:
 
         # ---------- Get contig data ----------
-        proteins_df = fetch_proteins(contig_id, conn)
+        try:
+            proteins_df = fetch_proteins(contig_id, conn)
+        except Exception as e:
+            raise ValueError(f"Failed to fetch proteins for contig {contig_id}: {e}.")
+        proteins_df = proteins_df.copy()
+        proteins_df['type'] = 'protein'
+        try:
+            pseudogenes_df = fetch_pseudogenes(contig_id, conn)
+        except Exception as e:
+            logger.error(f"Error fetching pseudogenes for contig {contig_id}: {e}")
+            pseudogenes_df = pd.DataFrame()
+        if not pseudogenes_df.empty:
+            pseudogenes_df = pseudogenes_df.copy()
+            pseudogenes_df['type'] = 'pseudo'
+            pseudogenes_df['pseudo_id'] = pseudogenes_df['pseudo_id'].astype(str)
+            pseudogenes_df['id'] = 'pseudo_' + pseudogenes_df['pseudo_id']
+            contig_df = pd.concat([proteins_df, pseudogenes_df], ignore_index=True)
+        else:
+            contig_df = proteins_df.copy()
+        try:
+            plasann_df = fetch_replicons_for_contig(contig_id, conn)
+        except Exception as e:
+            logger.error(f"Error fetching PlasAnn replicon data for contig {contig_id}: {e}")
+            plasann_df = pd.DataFrame()
+        plasann_replicons[contig_id] = plasann_df
+
+        
+        # ---------- Get protein annotations ----------
         try:
             amr_df = fetch_amr_for_proteins(proteins_df['id'].tolist(), conn)
         except Exception as e:
@@ -123,10 +150,8 @@ def main():
             amr_df = pd.DataFrame()
         if not amr_df.empty:
             amr_df['ARO'] = amr_df['ARO'].astype(int)
-            contig_df = proteins_df.merge(amr_df, how='left', on='id')
+            contig_df = contig_df.merge(amr_df, how='left', on='id')
             contig_df = contig_df.merge(aro_index_df, how='left', left_on='ARO', right_on='ARO Accession')
-        else:
-            contig_df = proteins_df.copy()
         try:
             mcl_df = fetch_mcl_for_proteins(proteins_df['id'].tolist(), conn)
         except Exception as e:
@@ -134,17 +159,19 @@ def main():
             mcl_df = pd.DataFrame()
         if not mcl_df.empty:
             mcl_df['mcl_id'] = mcl_df['mcl_id'].astype(int)
-            mcl_rep_df = replicon_df.merge(mcl_df, how='inner', on='mcl_id')
-            mcl_rep_df = mcl_rep_df.rename(columns={'cluster_name': 'replicon'})
-            contig_df = contig_df.merge(mcl_rep_df[['id', 'replicon', 'mcl_id']], how='left', on='id')
-        else:
-            contig_df = contig_df.copy()
         try:
-            plasann_df = fetch_replicons_for_contig(contig_id, conn)
+            pmcl_df = fetch_mcl_for_pseudogenes(pseudogenes_df['id'].tolist(), conn)
         except Exception as e:
-            logger.error(f"Error fetching PlasAnn replicon data for contig {contig_id}: {e}")
-            plasann_df = pd.DataFrame()
-        plasann_replicons[contig_id] = plasann_df
+            logger.error(f"Error fetching MCL data for pseudogenes in contig {contig_id}: {e}")
+            pmcl_df = pd.DataFrame()
+        if not pmcl_df.empty and not pseudogenes_df.empty:
+            pmcl_df['mcl_id'] = pmcl_df['mcl_id'].astype(int)
+            pmcl_df['id'] = 'pseudo_' + pmcl_df['pseudo_id'].astype(str)
+        combined_mcl_df = pd.concat([mcl_df, pmcl_df], ignore_index=True)
+        if not combined_mcl_df.empty:
+            combined_mcl_df = combined_mcl_df.merge(replicon_df, how='inner', on='mcl_id')
+            combined_mcl_df = combined_mcl_df.rename(columns={'cluster_name': 'replicon'})
+            contig_df = contig_df.merge(combined_mcl_df[['id', 'mcl_id', 'replicon']], how='left', on='id')
         all_contigs_df = pd.concat([all_contigs_df, contig_df], ignore_index=True)
 
         # ---------- Write FASTA ----------
@@ -153,7 +180,7 @@ def main():
             logger.info(f"Using existing FASTA for contig {contig_id} at {faa_path}")
         else:
             logger.info(f"Writing FASTA for contig {contig_id} to {faa_path}")
-            sequences = {f"{row['id']}": row['sequence'] for _, row in contig_df.iterrows()}
+            sequences = {f"{row['id']}": row['sequence'] for _, row in contig_df.iterrows() if row['type'] == 'protein'}
             write_fasta(sequences, faa_path)
         faa_paths[contig_id] = faa_path
 
