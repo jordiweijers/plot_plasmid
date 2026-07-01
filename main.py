@@ -1,19 +1,21 @@
 from pygenomeviz import GenomeViz
 import mysql.connector
 import pandas as pd
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import os
 from time import time
 import numpy as np
 import argparse
+import itertools
 
 from plot_plasmid.utils import setup_logging, run_command
 from plot_plasmid.database import fetch_proteins, fetch_amr_for_proteins, fetch_mcl_for_proteins, fetch_replicons_for_contig, fetch_pseudogenes, fetch_mcl_for_pseudogenes
 from plot_plasmid.blast import build_makeblastdb_command, build_blastp_command
 from plot_plasmid.parse import parse_blast_output
 from plot_plasmid.plot import plot_contigs
+from plot_plasmid.order import canonical_pair, swap_query_subject, score_pair, order_by_clustering
 
-CONTIG_IDS = [1732, 2823, 2591]
+CONTIG_IDS = [3889, 9353, 10599]
 OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/{'_'.join(map(str, CONTIG_IDS))}.svg"
 ARO_INDEX_FILE = "/zfshome/sunam274/compare_plasmids/card-data/aro_index.tsv"
 REPLICON_MCL_FILE = "/zfshome/sunam274/compare_plasmids/results/replicon_mcl.csv"
@@ -82,26 +84,63 @@ def write_fasta(sequences: Dict[str, str], output_file: str):
         for header, seq in sequences.items():
             f.write(f">{header}\n{seq}\n")
 
-def parse_arguments():
+def run_blastp_pairs(pairs: List[Tuple[int, int]], faa_paths: Dict[int, str], db_prefixes: Dict[int, str], logger) -> Dict[Tuple[int, int], pd.DataFrame]:
     """
-    Parse command-line arguments.
+    Run (or reuse cached) BLASTP for each (query, subject) contig pair and parse the results.
+    Args:
+        pairs (List[Tuple[int, int]]): A list of (query_contig_id, subject_contig_id) pairs to BLAST.
+        faa_paths (Dict[int, str]): A dictionary mapping contig_id to its protein FASTA path.
+        db_prefixes (Dict[int, str]): A dictionary mapping contig_id to its BLAST database prefix.
+        logger: A logger instance for logging progress.
     Returns:
-        argparse.Namespace: The parsed arguments.
+        Dict[Tuple[int, int], pd.DataFrame]: A dictionary mapping each (query, subject) pair to its parsed BLASTP results.
     """
+    results = {}
+    for query, subject in pairs:
+        faa = faa_paths[query]
+        db_prefix = db_prefixes[subject]
+        output_file = os.path.join(BLAST_OUTPUT_DIR, f"{query}_vs_{subject}.tsv")
+        if os.path.exists(output_file):
+            logger.info(f"Using existing BLASTP output for {query} vs {subject} at {output_file}")
+        else:
+            logger.info(f"Running BLASTP for {query} vs {subject}, outputting to {output_file}")
+            cmd = build_blastp_command(faa, db_prefix, output_file, BLASTP_PARAMS)
+            run_command(cmd, os.path.join(LOG_DIR, f"blastp_{query}_vs_{subject}_{int(time())}.log"))
+        results[(query, subject)] = parse_blast_output(output_file)
+    return results
+
+def parse_arguments():
     parser = argparse.ArgumentParser(description="Plot plasmid contigs with PyGenomeViz")
-    parser.add_argument(
-        "-c", "--contig_ids", type=int, nargs="+", default=CONTIG_IDS, help="List of contig IDs to plot (space-separated)"
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument(
+        "-c", "--contig_ids", type=int, nargs="+", help="List of contig IDs to plot (space-separated)"
+    )
+    input_group.add_argument(
+        "-f", "--contig_file", type=str, help="Path to a file with one contig ID per line"
     )
     parser.add_argument(
         "-o", "--output_file", type=str, default=None, help="Output file path for the plot (e.g. contigs.svg)"
+    )
+    parser.add_argument(
+        "-s", "--order-by-similarity", action="store_true",
+        help="Reorder contigs by all-vs-all BLASTP similarity clustering instead of the input order"
     )
     return parser.parse_args()
 
 def main():
     args = parse_arguments()
-    CONTIG_IDS = args.contig_ids
+    if args.contig_file:
+        with open(args.contig_file) as fh:
+            CONTIG_IDS = [int(line.strip()) for line in fh if line.strip()]
+    elif args.contig_ids:
+        CONTIG_IDS = args.contig_ids
+    # else: fall back to module-level CONTIG_IDS default
     if not args.output_file:
-        OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/{'_'.join(map(str, CONTIG_IDS))}.svg"
+        if args.contig_file:
+            base = os.path.splitext(os.path.basename(args.contig_file))[0]
+        else:
+            base = '_'.join(map(str, CONTIG_IDS))
+        OUTPUT_FILE = f"/zfshome/sunam274/compare_plasmids/results/plots/{base}.svg"
     else:
         OUTPUT_FILE = args.output_file
     logger = setup_logging(os.path.join(LOG_DIR, f"plot_plasmid_{int(time())}.log"))
@@ -197,19 +236,31 @@ def main():
     conn.close()
 
     # ---------- Run BLASTP ----------
-    adjacent_pairs = [(CONTIG_IDS[i], CONTIG_IDS[i+1]) for i in range(len(CONTIG_IDS)-1)]
-    blast_results = {}
-    for query, subject in adjacent_pairs:
-        faa = faa_paths[query]
-        db_prefix = db_prefixes[subject]
-        output_file = os.path.join(BLAST_OUTPUT_DIR, f"{query}_vs_{subject}.tsv")
-        if os.path.exists(output_file):
-            logger.info(f"Using existing BLASTP output for {query} vs {subject} at {output_file}")
-        else:
-            logger.info(f"Running BLASTP for {query} vs {subject}, outputting to {output_file}")
-            cmd = build_blastp_command(faa, db_prefix, output_file, BLASTP_PARAMS)
-            run_command(cmd, os.path.join(LOG_DIR, f"blastp_{query}_vs_{subject}_{int(time())}.log"))
-        blast_results[(query, subject)] = parse_blast_output(output_file)
+    if args.order_by_similarity:
+        all_pairs = list(itertools.combinations(sorted(set(CONTIG_IDS)), 2))
+        blast_results = run_blastp_pairs(all_pairs, faa_paths, db_prefixes, logger)
+
+        pair_scores = {}
+        for pair, df in blast_results.items():
+            try:
+                pair_scores[pair] = score_pair(df, MIN_IDENTITY)
+            except ValueError as e:
+                logger.warning(f"No BLASTP hits above identity threshold for pair {pair}: {e}")
+                pair_scores[pair] = 0.0
+
+        CONTIG_IDS = order_by_clustering(CONTIG_IDS, pair_scores)
+        logger.info(f"Reordered contigs by similarity clustering: {CONTIG_IDS}")
+
+        adjacent_pairs = [(CONTIG_IDS[i], CONTIG_IDS[i+1]) for i in range(len(CONTIG_IDS)-1)]
+        adjacent_blast_results = {}
+        for query, subject in adjacent_pairs:
+            canon = canonical_pair(query, subject)
+            df = blast_results[canon]
+            adjacent_blast_results[(query, subject)] = df if canon == (query, subject) else swap_query_subject(df)
+        blast_results = adjacent_blast_results
+    else:
+        adjacent_pairs = [(CONTIG_IDS[i], CONTIG_IDS[i+1]) for i in range(len(CONTIG_IDS)-1)]
+        blast_results = run_blastp_pairs(adjacent_pairs, faa_paths, db_prefixes, logger)
 
     # ---------- Plot contigs ----------
     plot_contigs(all_contigs_df, CONTIG_IDS, blast_results, plasann_replicons, MIN_IDENTITY, OUTPUT_FILE)
