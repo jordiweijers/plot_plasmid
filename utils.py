@@ -1,7 +1,10 @@
 import logging
 import os
 import subprocess
-from typing import List
+import multiprocessing
+from typing import Callable, Iterable, List
+
+from tqdm import tqdm
 
 def setup_logging(log_file, name="main_logger", console=True):
     """ Setup up logging."""
@@ -50,3 +53,37 @@ def run_command(cmd, log_path, cpus=1):
         )
     if process.returncode != 0:
         raise RuntimeError(f"External command failed (see {log_path})")
+
+def run_in_parallel(function: Callable, args_list: Iterable[List], cpus: int) -> List:
+    """
+    Run a given function in parallel over available CPUs.
+    Args:
+        function (Callable): The function to call.
+        args_list(Iterable[List]): Iterabale of argument lists for each function call.
+        cpus (int): Number ofCPUs to use.
+    Returns:
+        List: List of return values from each function call.
+    """
+    if cpus <= 1:
+        results = []
+        for args in tqdm(args_list, desc="Processing"):
+            results.append(function(*args))
+        return results
+    for item in args_list:
+        try:
+            iter(item)
+        except TypeError as e:
+            raise TypeError(f"Each element of args_list must be an iterable of arguments. Got: {item}")
+    manager = multiprocessing.Manager()
+    results = manager.list()
+    pbar = tqdm(total=len(args_list), desc="Processing")
+    def callback(result):
+        results.append(result)
+        pbar.update()
+    with multiprocessing.Pool(cpus) as pool:
+        for args in args_list:
+            pool.apply_async(function, args=args, callback=callback)
+        pool.close()
+        pool.join()
+    pbar.close()
+    return list(results)
