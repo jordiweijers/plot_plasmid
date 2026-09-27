@@ -9,13 +9,11 @@ from plot_plasmid.config import DatabaseSchema, ContigSource, FeatureSource
 
 class ContigLoader:
     """
-    Loads contig data from one of the MySQL databases in SCHEMAS.
+    Loads contigs and their features from a MySQL database, using the table and column names in its DatabaseSchema.
     """
-    def __init__(self, database: str, host: str = "localhost", user: str = "gmg"):
-        if database not in SCHEMAS:
-            raise ValueError(f"Unknown database '{database}'. Choose from: {', '.join(SCHEMAS)} or add a new Database schema.")
+    def __init__(self, database: str, schema: DatabaseSchema, host: str, user: str):
         self.database = database
-        self.schema = SCHEMAS[database]
+        self.schema = schema
         self.conn = mysql.connector.connect(host=host, user=user, database=database)
 
     def __enter__(self) -> "ContigLoader":
