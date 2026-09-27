@@ -8,6 +8,7 @@ from plot_plasmid.utils import setup_logging
 from plot_plasmid.config import load_config
 from plot_plasmid.database import ContigLoader
 from plot_plasmid.models import Contig
+from plot_plasmid.order import order_by_clustering
 
 CONTIG_IDS = ["3889", "9353", "10599"]
 DEFAULT_DATABASE = "kes2021"
@@ -90,7 +91,7 @@ def run_plot(
     """
     contig_categories = contig_categories or {}
     logger = setup_logging(os.path.join(LOG_DIR, f"plot_plasmid_{int(time())}.log"))
-    config = load_config(config_file)
+    config = load_config(Path(config_file))
     if database not in config.databases:
         raise ValueError(f"Unknown database '{database}'. Choose from: {', '.join(config.databases)} or add it to {config_file}.")
 
@@ -102,6 +103,11 @@ def run_plot(
             contig.category = contig_categories.get(contig.id)
             logger.info(f"Loaded contig {contig.id} from {database}: {contig.length} bp, {len(contig.features)} features")
             contigs.append(contig)
+
+    # ---------- Order contigs ----------
+    if order_by_similarity:
+        contigs = order_by_clustering(contigs)
+        logger.info(f"Reordered contigs by protein family similarity: {[contig.id for contig in contigs]}")
     return contigs
 
 def main():

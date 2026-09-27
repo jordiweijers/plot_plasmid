@@ -1,88 +1,59 @@
 import numpy as np
-import pandas as pd
-from typing import Dict, List, Tuple
+from typing import List
 
 from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, optimal_leaf_ordering, leaves_list
 
+from plot_plasmid.models import Contig
 
-def canonical_pair(a: int, b: int) -> Tuple[int, int]:
+
+def compute_presence_matrix(contigs: List[Contig]) -> np.ndarray:
     """
-    Sort a pair of contig IDs so the smaller one is always first, fixing a single BLASTP direction per unordered pair.
+    Compute a presence/absence matrix of protein families per contig.
     Args:
-        a (int): The first contig ID.
-        b (int): The second contig ID.
+        contigs (List[Contig]): The contigs to include.
     Returns:
-        Tuple[int, int]: (a, b) sorted so the smaller ID comes first.
+        np.ndarray: A 2D boolean array of shape (n_contigs, n_families) that is True where the contig has at least one feature of the protein family. Features without a protein family are ignored.
     """
-    return (a, b) if a <= b else (b, a)
+    family_sets = [{feature.protein_family for feature in contig.features if feature.protein_family is not None} for contig in contigs]
+    column = {family: i for i, family in enumerate(sorted(set().union(*family_sets)))}
+    presence_matrix = np.zeros((len(contigs), len(column)), dtype=bool)
+    for row, families in enumerate(family_sets):
+        presence_matrix[row, [column[family] for family in families]] = True
+    return presence_matrix
 
 
-def swap_query_subject(df: pd.DataFrame) -> pd.DataFrame:
+def compute_jaccard_matrix(presence_matrix: np.ndarray) -> np.ndarray:
     """
-    Swap the query/subject roles in a parsed BLASTP DataFrame, so a query=A vs subject=B result can be reused as query=B vs subject=A.
+    Compute a Jaccard similarity matrix between contigs based on their protein family presence/absence.
     Args:
-        df (pd.DataFrame): A parsed BLASTP outfmt-6 DataFrame (see parse.parse_blast_output).
+        presence_matrix (np.ndarray): A 2D boolean array of shape (n_contigs, n_families), as returned by compute_presence_matrix.
     Returns:
-        pd.DataFrame: A copy of df with qseqid<->sseqid and qstart/qend<->sstart/send swapped as coordinate pairs. pident, length, mismatch, gapopen, evalue and bitscore are left unchanged.
+        np.ndarray: A 2D array of shape (n_contigs, n_contigs) with Jaccard similarity values between 0 and 1. Two contigs without any protein family have similarity 0.
     """
-    swapped = df.rename(columns={
-        "qseqid": "sseqid", "sseqid": "qseqid",
-        "qstart": "sstart", "sstart": "qstart",
-        "qend": "send", "send": "qend",
-    })
-    return swapped[df.columns]
+    intersection = np.logical_and(presence_matrix[:, None, :], presence_matrix[None, :, :]).sum(axis=2)
+    union = np.logical_or(presence_matrix[:, None, :], presence_matrix[None, :, :]).sum(axis=2)
+    return np.divide(intersection, union, out=np.zeros_like(intersection, dtype=float), where=union > 0)
 
 
-def score_pair(df: pd.DataFrame, min_identity: float) -> float:
+def order_by_clustering(contigs: List[Contig], method: str = "average") -> List[Contig]:
     """
-    Compute a similarity score for one contig pair from its parsed BLASTP DataFrame.
+    Order contigs by hierarchical clustering with optimal leaf ordering on their pairwise Jaccard similarity, so that neighboring contigs in the result are as similar as possible. No contig is anchored to a fixed position.
     Args:
-        df (pd.DataFrame): A parsed BLASTP outfmt-6 DataFrame for the pair (see parse.parse_blast_output).
-        min_identity (float): Minimum percent identity for a hit to count towards the score.
-    Returns:
-        float: The sum of bitscore across rows with pident >= min_identity.
-    Raises:
-        ValueError: If df is empty or no rows have pident >= min_identity.
-    """
-    if df.empty:
-        raise ValueError("Cannot score an empty BLASTP result.")
-    filtered = df[df["pident"] >= min_identity]
-    if filtered.empty:
-        raise ValueError(f"No BLASTP hits with pident >= {min_identity}.")
-    return float(filtered["bitscore"].sum())
-
-
-def order_by_clustering(
-    contig_ids: List[int],
-    pair_scores: Dict[Tuple[int, int], float],
-    method: str = "average",
-) -> List[int]:
-    """
-    Order contigs by hierarchical clustering with optimal leaf ordering on their pairwise similarity scores, so that neighboring contigs in the result are as similar as possible. No contig is anchored to a fixed position.
-    Args:
-        contig_ids (List[int]): The contigs to order.
-        pair_scores (Dict[Tuple[int, int], float]): A dictionary mapping canonical_pair(a, b) to a similarity score, for every unordered pair among contig_ids. Pairs with no similarity score (e.g. no BLASTP hits above the identity threshold) should be omitted and are treated as similarity 0.
+        contigs (List[Contig]): The contigs to order.
         method (str): The scipy linkage method to use.
     Returns:
-        List[int]: contig_ids reordered so neighboring contigs are as similar as possible.
+        List[Contig]: The contigs reordered so neighboring contigs are as similar as possible.
     """
-    n = len(contig_ids)
-    if n < 2:
-        return list(contig_ids)
+    if len(contigs) < 2:
+        return list(contigs)
 
-    index = {contig_id: i for i, contig_id in enumerate(contig_ids)}
-    similarity = np.zeros((n, n))
-    for (a, b), score in pair_scores.items():
-        i, j = index[a], index[b]
-        similarity[i, j] = score
-        similarity[j, i] = score
-
-    distance = similarity.max() - similarity
+    presence_matrix = compute_presence_matrix(contigs)
+    distance = 1.0 - compute_jaccard_matrix(presence_matrix)
     np.fill_diagonal(distance, 0.0)
 
     condensed = squareform(distance)
     Z = linkage(condensed, method=method)
     Z_ordered = optimal_leaf_ordering(Z, condensed)
     order = leaves_list(Z_ordered)
-    return [contig_ids[i] for i in order]
+    return [contigs[i] for i in order]
