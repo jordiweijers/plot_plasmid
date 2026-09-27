@@ -1,102 +1,10 @@
 import mysql.connector
 import pandas as pd
-import numpy as np
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 from dataclasses import dataclass
 
 from plot_plasmid.models import Contig, Feature
-
-@dataclass(frozen=True)
-class FeatureSource:
-    """
-    Describes how one table of features is structured in the database.
-    Attributes:
-        table (str): The name of the table containing the features.
-        id_column (str): The name of the column containing feature IDs.
-        contig_column (str): The name of the column containing contig IDs.
-        is_pseudo (str): The SQL boolean expression to determine if a feature is a pseudogene.
-        mcl_table (str): The name of the MCL table.
-        mcl_id_column (str): The name of the column containing MCL IDs.
-        mcl_family_column (str): The name of the column containing MCL family IDs.
-        amr_table (Optional[str]): The name of the AMR table, if any.
-        amr_id_column (Optional[str]): The name of the column containing AMR IDs, if any.
-        amr_aro_column (Optional[str]): The name of the column containing AMR ARO IDs, if any.
-    """
-    table: str
-    id_column: str
-    contig_column: str
-    is_pseudo: str  
-    mcl_table: str
-    mcl_id_column: str
-    mcl_family_column: str
-    amr_table: Optional[str] = None
-    amr_id_column: Optional[str] = None
-    amr_aro_column: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class ContigSource:
-    """
-    Describes how one table of contigs is structured in the database.
-    Attributes:
-        table (str): The name of the table containing the contigs.
-        id_column (str): The name of the column containing contig IDs.
-        length_column (str): The name of the column containing contig lengths.
-    """
-    table: str
-    id_column: str
-    length_column: str
-
-
-@dataclass(frozen=True)
-class Schema:
-    """
-    Describes the schema of the database, including contigs and features tables.
-    Attributes:
-        contigs (ContigSource): The source of the contigs table.
-        features (Tuple[FeatureSource, ...]): The sources of the features tables.
-        replicon_mcl_file (Optional[Path]): The path to the replicon MCL file, if any.
-        conjugation_mcl_file (Optional[Path]): The path to the conjugation MCL file, if any.
-    """
-    contigs: ContigSource
-    features: Tuple[FeatureSource, ...]
-    replicon_mcl_file: Optional[Path] = None
-    conjugation_mcl_file: Optional[Path] = None
-
-
-SCHEMAS = {
-    "kes2021": Schema(
-        contigs=ContigSource(table="contigs", id_column="contig_ID", length_column="Size"),
-        features=(
-            FeatureSource(
-                table="proteins", id_column="id", contig_column="contig_ID", is_pseudo="FALSE", mcl_table="mcl30", mcl_id_column="id", mcl_family_column="clust", amr_table="amr", amr_id_column="id", amr_aro_column="ARO",
-            ),
-            FeatureSource(
-                table="pseudogenes", id_column="pseudo_id", contig_column="contig_ID", is_pseudo="TRUE", mcl_table="pmcl", mcl_id_column="pseudo_id", mcl_family_column="clust",
-            ),
-        ),
-    ),
-    "ESKAPEE25": Schema(
-        contigs=ContigSource(table="contigs", id_column="contig_id", length_column="size"),
-        features=(
-            FeatureSource(
-                table="proteins", id_column="id", contig_column="contig_id", is_pseudo="FALSE", mcl_table="mcl", mcl_id_column="id", mcl_family_column="clust", amr_table="amr", amr_id_column="id", amr_aro_column="ARO",
-            ),
-            FeatureSource(
-                table="pseudogenes", id_column="pseudo_id", contig_column="contig_id", is_pseudo="TRUE", mcl_table="pmcl", mcl_id_column="pseudo_id", mcl_family_column="clust",
-            ),
-        ),
-    ),
-    "pantoea2025_v2": Schema(
-        contigs=ContigSource(table="contigs", id_column="contig_id", length_column="contig_length"),
-        features=(
-            FeatureSource(
-                table="features_cds", id_column="cds_id", contig_column="contig_id", is_pseudo="FIND_IN_SET('pseudo', REPLACE(attributes, ';', ',')) > 0", mcl_table="mcls", mcl_id_column="cds_id", mcl_family_column="mcl_id",
-            ),
-        ),
-    ),
-}
+from plot_plasmid.config import DatabaseSchema, ContigSource, FeatureSource
 
 
 class ContigLoader:

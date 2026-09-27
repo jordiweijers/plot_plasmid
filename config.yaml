@@ -1,0 +1,122 @@
+# Configuration for plot_plasmid.
+#
+# connection:  how to reach the MySQL server.
+# databases:   one schema per MySQL database, describing where contigs and features live.
+#              Table and column names, and the is_pseudo expressions, are inserted into
+#              the SQL queries as-is, so is_pseudo is an SQL expression evaluated by MySQL.
+# categories:  rules that assign a category (and colour) to MCL protein families.
+#              The patterns are Python regular expressions, matched against the family's
+#              main name or main symbol, so they work the same on every database.
+
+connection:
+  host: localhost
+  user: gmg
+
+# Each database has:
+#   contigs:   information about the contigs table
+#     table: name of the contigs table
+#     id_column: name of the column containing contig IDs
+#     length_column: name of the column containing contig lengths
+#   features:  list of feature sources (proteins, pseudogenes, etc.)
+#     table:
+#     id_column: name of the column containing feature IDs
+#     contig_column: name of the column containing contig IDs
+#     name_column: name of the column containing feature names
+#     symbol_column: name of the column containing feature symbols (or null if none)
+#     is_pseudo: SQL expression evaluated by MySQL to determine if the feature is a pseudogene
+#     mcl_table: name of the MCL table
+#     mcl_id_column: name of the column containing feature IDs in the MCL table
+#     mcl_family_column: name of the column containing MCL family IDs
+#     amr_table: name of the AMR table (optional)
+#     amr_id_column: name of the column containing feature IDs in the AMR table
+#     amr_aro_column: name of the column containing ARO IDs in the AMR table
+databases:
+  kes2021:
+    contigs:
+      table: contigs
+      id_column: contig_ID
+      length_column: Size
+    features:
+      - table: proteins
+        id_column: id
+        contig_column: contig_ID
+        name_column: name
+        symbol_column: symbol
+        is_pseudo: "FALSE"    # SQL expression evaluated by MySQL
+        mcl_table: mcl30
+        mcl_id_column: id
+        mcl_family_column: clust
+        amr_table: amr
+        amr_id_column: id
+        amr_aro_column: ARO
+      - table: pseudogenes
+        id_column: pseudo_id
+        contig_column: contig_ID
+        name_column: name
+        symbol_column: null
+        is_pseudo: "TRUE"    # SQL expression evaluated by MySQL
+        mcl_table: pmcl
+        mcl_id_column: pseudo_id
+        mcl_family_column: clust
+
+  ESKAPEE25:
+    contigs:
+      table: contigs
+      id_column: contig_id
+      length_column: size
+    features:
+      - table: proteins
+        id_column: id
+        contig_column: contig_id
+        name_column: name
+        symbol_column: symbol
+        is_pseudo: "FALSE"    # SQL expression evaluated by MySQL
+        mcl_table: mcl
+        mcl_id_column: id
+        mcl_family_column: clust
+        amr_table: amr
+        amr_id_column: id
+        amr_aro_column: ARO
+      - table: pseudogenes
+        id_column: pseudo_id
+        contig_column: contig_id
+        name_column: name
+        symbol_column: symbol
+        is_pseudo: "TRUE"    # SQL expression evaluated by MySQL
+        mcl_table: pmcl
+        mcl_id_column: pseudo_id
+        mcl_family_column: clust
+
+  pantoea2025_v2:
+    contigs:
+      table: contigs
+      id_column: contig_id
+      length_column: contig_length
+    features:
+      - table: features_cds
+        id_column: cds_id
+        contig_column: contig_id
+        name_column: name
+        symbol_column: symbol
+        is_pseudo: "FIND_IN_SET('pseudo', REPLACE(attributes, ';', ',')) > 0"    # SQL expression evaluated by MySQL
+        mcl_table: mcls
+        mcl_id_column: cds_id
+        mcl_family_column: mcl_id
+
+# Each category has:
+#   name:     label shown in the plot legend
+#   column:   'name' or 'symbol', i.e. which main annotation of the family to match
+#   pattern:  Python regex, found anywhere in the value (re.search); case-sensitive,
+#             start the pattern with (?i) to ignore case
+#   color:    colour of the features in this category
+# The first category that matches a family wins, so order sets the priority.
+categories:
+  - name: Replication
+    column: name
+    pattern: 'replication initiat'
+    color: '#5e2bff'
+
+  - name: Conjugation
+    column: symbol
+    pattern: '^tra[A-Z]$'
+    color: '#8b0000'
