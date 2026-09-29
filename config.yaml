@@ -4,9 +4,8 @@
 # databases:   one schema per MySQL database, describing where contigs and features live.
 #              Table and column names, and the is_pseudo expressions, are inserted into
 #              the SQL queries as-is, so is_pseudo is an SQL expression evaluated by MySQL.
-# categories:  rules that assign a category (and colour) to MCL protein families.
-#              The patterns are Python regular expressions, matched against the family's
-#              main name or main symbol, so they work the same on every database.
+# categories:  colour proteins, pseudogenes, protein families or contigs whose IDs are
+#              listed in a file or returned by an SQL query.
 
 connection:
   host: localhost
@@ -18,18 +17,13 @@ connection:
 #     id_column: name of the column containing contig IDs
 #     length_column: name of the column containing contig lengths
 #   features:  list of feature sources (proteins, pseudogenes, etc.)
-#     table:
+#     table: name of the features table
 #     id_column: name of the column containing feature IDs
 #     contig_column: name of the column containing contig IDs
-#     name_column: name of the column containing feature names
-#     symbol_column: name of the column containing feature symbols (or null if none)
 #     is_pseudo: SQL expression evaluated by MySQL to determine if the feature is a pseudogene
 #     mcl_table: name of the MCL table
 #     mcl_id_column: name of the column containing feature IDs in the MCL table
 #     mcl_family_column: name of the column containing MCL family IDs
-#     amr_table: name of the AMR table (optional)
-#     amr_id_column: name of the column containing feature IDs in the AMR table
-#     amr_aro_column: name of the column containing ARO IDs in the AMR table
 databases:
   kes2021:
     contigs:
@@ -40,20 +34,13 @@ databases:
       - table: proteins
         id_column: id
         contig_column: contig_ID
-        name_column: name
-        symbol_column: symbol
         is_pseudo: "FALSE"    # SQL expression evaluated by MySQL
         mcl_table: mcl30
         mcl_id_column: id
         mcl_family_column: clust
-        amr_table: amr
-        amr_id_column: id
-        amr_aro_column: ARO
       - table: pseudogenes
         id_column: pseudo_id
         contig_column: contig_ID
-        name_column: name
-        symbol_column: null
         is_pseudo: "TRUE"    # SQL expression evaluated by MySQL
         mcl_table: pmcl
         mcl_id_column: pseudo_id
@@ -68,20 +55,13 @@ databases:
       - table: proteins
         id_column: id
         contig_column: contig_id
-        name_column: name
-        symbol_column: symbol
         is_pseudo: "FALSE"    # SQL expression evaluated by MySQL
         mcl_table: mcl
         mcl_id_column: id
         mcl_family_column: clust
-        amr_table: amr
-        amr_id_column: id
-        amr_aro_column: ARO
       - table: pseudogenes
         id_column: pseudo_id
         contig_column: contig_id
-        name_column: name
-        symbol_column: symbol
         is_pseudo: "TRUE"    # SQL expression evaluated by MySQL
         mcl_table: pmcl
         mcl_id_column: pseudo_id
@@ -96,27 +76,79 @@ databases:
       - table: features_cds
         id_column: cds_id
         contig_column: contig_id
-        name_column: name
-        symbol_column: symbol
         is_pseudo: "FIND_IN_SET('pseudo', REPLACE(attributes, ';', ',')) > 0"    # SQL expression evaluated by MySQL
         mcl_table: mcls
         mcl_id_column: cds_id
         mcl_family_column: mcl_id
 
 # Each category has:
-#   name:     label shown in the plot legend
-#   column:   'name' or 'symbol', i.e. which main annotation of the family to match
-#   pattern:  Python regex, found anywhere in the value (re.search); case-sensitive,
-#             start the pattern with (?i) to ignore case
-#   color:    colour of the features in this category
-# The first category that matches a family wins, so order sets the priority.
+#   name:      label shown in the plot legend
+#   color:     colour of the features (or contig labels) in this category, in quotes
+#   type:      what the IDs refer to: protein, pseudo, family (an MCL family: colours all
+#              its proteins and pseudogenes) or contig (colours the contig label)
+#   database:  the database this category applies to; make another category for another database
+#   query:     path to an SQL file that returns one column of IDs (optional)
+#   path:      path to a file with one ID per line; blank lines and lines starting with # are skipped (optional)
+# Give a query, a path, or both:
+#   query only:  the query runs on every plot. Write @contig_id where the contig ID goes;
+#                the query then runs once per contig, which keeps it fast.
+#   path only:   the IDs are read from the file, e.g. a list you made yourself.
+#   both:        the query runs on the whole database once and its IDs are saved at path;
+#                later plots read the file. The query may not use @contig_id, because the
+#                saved IDs have to be valid for every contig.
+# Paths are relative to this file. The first category that matches wins, so order sets the priority.
+# In MySQL, REGEXP ignores case; use REGEXP BINARY for a case-sensitive match.
 categories:
+  - name: AMR
+    color: '#33ffff'
+    type: protein
+    database: kes2021
+    query: queries/kes2021/amr_proteins.sql
+
   - name: Replication
-    column: name
-    pattern: 'replication initiat'
     color: '#5e2bff'
+    type: family
+    database: kes2021
+    query: queries/kes2021/replication_families.sql
+    path: cache/kes2021/replication_families.txt
 
   - name: Conjugation
-    column: symbol
-    pattern: '^tra[A-Z]$'
     color: '#8b0000'
+    type: family
+    database: kes2021
+    query: queries/kes2021/conjugation_families.sql
+    path: cache/kes2021/conjugation_families.txt
+
+  - name: AMR
+    color: '#33ffff'
+    type: protein
+    database: ESKAPEE25
+    query: queries/ESKAPEE25/amr_proteins.sql
+
+  - name: Replication
+    color: '#5e2bff'
+    type: family
+    database: ESKAPEE25
+    query: queries/ESKAPEE25/replication_families.sql
+    path: cache/ESKAPEE25/replication_families.txt
+
+  - name: Conjugation
+    color: '#8b0000'
+    type: family
+    database: ESKAPEE25
+    query: queries/ESKAPEE25/conjugation_families.sql
+    path: cache/ESKAPEE25/conjugation_families.txt
+
+  - name: Replication
+    color: '#5e2bff'
+    type: family
+    database: pantoea2025_v2
+    query: queries/pantoea2025_v2/replication_families.sql
+    path: cache/pantoea2025_v2/replication_families.txt
+
+  - name: Conjugation
+    color: '#8b0000'
+    type: family
+    database: pantoea2025_v2
+    query: queries/pantoea2025_v2/conjugation_families.sql
+    path: cache/pantoea2025_v2/conjugation_families.txt
