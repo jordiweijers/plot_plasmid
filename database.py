@@ -1,5 +1,6 @@
 import logging
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -19,6 +20,8 @@ class ContigLoader:
     def __init__(self, database: str, schema: DatabaseSchema, host: str, user: str):
         self.database = database
         self.schema = schema
+        self.host = host
+        self.user = user
         self.conn = mysql.connector.connect(host=host, user=user, database=database)
 
     def __enter__(self) -> "ContigLoader":
@@ -30,12 +33,48 @@ class ContigLoader:
     def close(self) -> None:
         self.conn.close()
 
+    def _kill_connection(self) -> None:
+        """
+        Stop the running query on the MySQL server by killing this loader's connection from a second connection.
+        Stopping Python alone leaves the query running on the server.
+        """
+        killer = mysql.connector.connect(host=self.host, user=self.user)
+        killer.cursor().execute(f"KILL {self.conn.connection_id}")
+        killer.close()
+        logger.info(f"Stopped the running query on MySQL (connection {self.conn.connection_id})")
+
     def _query(self, query: str, params: tuple = ()) -> List[dict]:
-        cursor = self.conn.cursor(dictionary=True)
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        cursor.close()
-        return rows
+        """
+        Run a query and return its rows. The query runs in a separate thread, so Ctrl+C reaches Python while MySQL is
+        still busy; the query is then stopped on the server too.
+        Args:
+            query (str): The SQL query, with %s for each parameter.
+            params (tuple): The parameters of the query.
+        Returns:
+            List[dict]: The rows, as dictionaries from column name to value.
+        Raises:
+            KeyboardInterrupt: If Ctrl+C is pressed while the query runs.
+        """
+        result = {}
+        def run():
+            try:
+                cursor = self.conn.cursor(dictionary=True)
+                cursor.execute(query, params)
+                result["rows"] = cursor.fetchall()
+                cursor.close()
+            except Exception as e:
+                result["error"] = e
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        try:
+            while thread.is_alive():
+                thread.join(0.1)
+        except KeyboardInterrupt:
+            self._kill_connection()
+            raise
+        if "error" in result:
+            raise result["error"]
+        return result["rows"]
 
     def _tables_changed(self, query: Optional[Path]) -> Optional[datetime]:
         """

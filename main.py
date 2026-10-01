@@ -10,6 +10,7 @@ from plot_plasmid.config import load_config
 from plot_plasmid.database import ContigLoader
 from plot_plasmid.models import Contig
 from plot_plasmid.order import order_by_clustering
+from plot_plasmid.plot import plot_contigs
 
 CONTIG_IDS = ["3889", "9353", "10599"]
 DEFAULT_CONFIG_FILE = Path(__file__).parent / "config.yaml"
@@ -120,6 +121,11 @@ def run_plot(
     if order_by_similarity:
         contigs = order_by_clustering(contigs)
         logger.info(f"Reordered contigs by protein family similarity: {[contig.id for contig in contigs]}")
+
+    # ---------- Plot contigs ----------
+    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
+    plot_contigs(contigs, categories, output_file)
+    logger.info(f"Saved plot to {output_file}")
     return contigs
 
 def main():
