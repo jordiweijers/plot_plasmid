@@ -176,7 +176,7 @@ def load_config(path: Path) -> Config:
     with open(path) as fh:
         raw = yaml.safe_load(fh)
     try:
-        connection, databases = raw["connection"], raw["databases"]
+        connection, databases, categories = raw["connection"], raw["databases"], raw["categories"]
     except KeyError as e:
         raise ValueError(f"Config file {path} is missing the section {e}") from e
     schemas = {database: _parse_schema(database, entry) for database, entry in databases.items()}
@@ -184,5 +184,5 @@ def load_config(path: Path) -> Config:
         host=connection["host"],
         user=connection["user"],
         databases=schemas,
-        categories=tuple(_parse_category(entry, path.parent, schemas) for entry in raw.get("categories") or []),
+        categories=tuple(_parse_category(entry, path.parent, schemas) for entry in categories),
     )

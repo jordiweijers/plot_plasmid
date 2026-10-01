@@ -11,7 +11,6 @@ from plot_plasmid.models import Contig
 from plot_plasmid.order import order_by_clustering
 
 CONTIG_IDS = ["3889", "9353", "10599"]
-DEFAULT_DATABASE = "kes2021"
 DEFAULT_CONFIG_FILE = Path(__file__).parent / "config.yaml"
 PLOT_DIR = "/zfshome/sunam274/compare_plasmids/results/plots"
 
@@ -50,7 +49,7 @@ def parse_arguments():
         "-f", "--contig_file", type=str, help="Path to a file with one contig ID per line, optionally followed by a tab and a category for label coloring"
     )
     parser.add_argument(
-        "-d", "--database", type=str, default=DEFAULT_DATABASE, help=f"Name of the database in the config file to load the contigs from (default: {DEFAULT_DATABASE})"
+        "-d", "--database", type=str, required=True, help="Name of the database in the config file to load the contigs from"
     )
     parser.add_argument(
         "--config", type=str, default=str(DEFAULT_CONFIG_FILE), help="Path to the YAML config file (default: config.yaml next to this script)"
@@ -67,7 +66,7 @@ def parse_arguments():
 def run_plot(
         contig_ids: List[str],
         output_file: str,
-        database: str = DEFAULT_DATABASE,
+        database: str,
         config_file: str = str(DEFAULT_CONFIG_FILE),
         order_by_similarity: bool = False,
         contig_categories: Optional[Dict[str, str]] = None,

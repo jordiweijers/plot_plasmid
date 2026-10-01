@@ -12,9 +12,7 @@ class Feature:
     end: int
     strand: Literal["+", "-"]
     protein_family: Optional[str] = None
-    aro: Optional[str] = None
-    replication: Optional[str] = None
-    conjugation: Optional[str] = None
+    category: Optional[str] = None
 
     @property
     def key(self) -> Tuple[str, str]:
