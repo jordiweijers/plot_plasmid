@@ -1,199 +1,124 @@
-from pygenomeviz import GenomeViz
-import pandas as pd
-import matplotlib.pyplot as plt
+from typing import Dict, Iterator, List, Tuple
+
 import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
-from typing import List, Dict, Tuple
+import matplotlib.pyplot as plt
+from pygenomeviz import GenomeViz
+from pygenomeviz.track import FeatureTrack
 
-AMR_COLOR = "#33ffff"
-REP_COLOR = "#5e2bff"
-CONJUGATION_COLOR = "#8b0000"
-PLASANN_COLOR = "#efa0bd"
+from plot_plasmid.models import Category, Contig, Feature
+
 DEF_COLOR = "#ff8800"
 WRAP_COLOR = "#ff0000"
+LINK_COLOR = "grey"
+
+
+def wrap_segments(start: int, end: int, length: int) -> Iterator[Tuple[int, int]]:
+    """
+    Split a feature that wraps around the end of a circular contig into the parts before and after the origin.
+    Args:
+        start (int): The start of the feature.
+        end (int): The end of the feature, smaller than start if the feature wraps around.
+        length (int): The length of the contig.
+    Yields:
+        Tuple[int, int]: The start and end of each part: one part, or two if the feature wraps around.
+    """
+    if start <= end:
+        yield start, end
+    else:
+        yield start, length
+        yield 0, end
+
+
+def find_links(contig1: Contig, contig2: Contig) -> List[Tuple[Feature, Feature]]:
+    """
+    Find the pairs of features in the same protein family on two contigs. A family with several copies links every copy
+    on the first contig to every copy on the second.
+    Args:
+        contig1 (Contig): The first contig.
+        contig2 (Contig): The second contig.
+    Returns:
+        List[Tuple[Feature, Feature]]: Each pair of a feature on contig1 and a feature on contig2 in the same protein family.
+    """
+    family_features: Dict[str, List[Feature]] = {}
+    for feature in contig2.features:
+        if feature.protein_family is not None:
+            family_features.setdefault(feature.protein_family, []).append(feature)
+    return [
+        (feature1, feature2)
+        for feature1 in contig1.features if feature1.protein_family is not None
+        for feature2 in family_features.get(feature1.protein_family, [])
+    ]
+
 
 def plot_contigs(
-        all_contigs_df: pd.DataFrame,
-        contig_ids: List[int],
-        blast_results: Dict[Tuple[int, int], pd.DataFrame],
-        plasann_replicons: Dict[int, pd.DataFrame],
-        min_identity: float,
+        contigs: List[Contig],
+        categories: List[Category],
         output_file: str,
-        contig_categories: Dict[int, str],
-    ) -> Tuple[GenomeViz, Dict[int, object]]:
+    ) -> Tuple[GenomeViz, Dict[str, FeatureTrack]]:
     """
-    Plot the contigs using pygenomeviz.
+    Plot the contigs from top to bottom with pygenomeviz, coloring features and contig labels by category and linking
+    the features of neighboring contigs that are in the same protein family.
     Args:
-        all_contigs_df (pd.DataFrame): A DataFrame containing the merged data for all contigs.
-        contig_ids (List[int]): A list of contig IDs to plot.
-        blast_results (Dict[Tuple[int, int], pd.DataFrame]): A dictionary containing BLAST results for each contig pair.
-        plasann_replicons (Dict[int, pd.DataFrame]): A dictionary containing PlasAnn replicon data for each contig.
-        min_identity (float): Minimum percent identity to consider for plotting BLAST links.
+        contigs (List[Contig]): The contigs to plot, in order from top to bottom.
+        categories (List[Category]): The categories, whose colors are used for the features and contig labels in them.
+            Categories with the same name share the color of the first one. Contig categories that are not in this
+            list, such as those from a contig file, get a color from the tab10 colormap.
         output_file (str): The path to the output file.
-        contig_categories (Dict[int, str]): A dictionary mapping contig_id to a category label for track-label coloring. Contigs absent from this dictionary get the default label color.
     Returns:
-        Tuple[GenomeViz, Dict[int, FeatureTrack]]: the GenomeViz figure object and a dict mapping
-            contig_id to its FeatureTrack -- callers that want to add more to the figure (e.g. an
+        Tuple[GenomeViz, Dict[str, FeatureTrack]]: the GenomeViz figure object and a dict mapping
+            contig ID to its FeatureTrack -- callers that want to add more to the figure (e.g. an
             extra subtrack) can add it to a track here and call `gv.plotfig()` again themselves to
             re-render including the addition.
     """
-    gv = GenomeViz(track_align_type = "center")
+    gv = GenomeViz(track_align_type="center")
     gv.set_scale_bar(ymargin=0.5)
-    contig_categories = contig_categories or {}
-    # ---------- Create a color mapping for the categories ----------
-    unique_categories = sorted(set(contig_categories.values()))
-    cmap = plt.get_cmap("tab10")
-    category_colors = {category: mcolors.to_hex(cmap(i % cmap.N)) for i, category in enumerate(unique_categories)}
-    # ---------- Create tracks for each contig ----------
-    track_dict = {}
-    for contig_id in contig_ids:
-        contig_df = all_contigs_df[all_contigs_df['contig_ID'] == contig_id]
-        cds_max = int(contig_df[['start', 'end']].max().max())
-        rep_df = plasann_replicons.get(contig_id)
-        if rep_df is not None and not rep_df.empty:
-            rep_max = int(rep_df[['start', 'end']].max().max())
-            genome_size = max(cds_max, rep_max)
-        else:
-            genome_size = cds_max
-        name = f"Contig {contig_id}"
-        category = contig_categories.get(contig_id)
-        label_kws = {"color": category_colors[category]} if category is not None else None
-        track = gv.add_feature_track(name, genome_size, label_kws=label_kws)
-        track_dict[contig_id] = track
 
+    # ---------- Create a color mapping for the categories ----------
+    category_colors: Dict[str, str] = {}
+    for category in categories:
+        category_colors.setdefault(category.name, category.color)
+    other_categories = sorted({contig.category for contig in contigs if contig.category is not None} - set(category_colors))
+    cmap = plt.get_cmap("tab10")
+    for i, name in enumerate(other_categories):
+        category_colors[name] = mcolors.to_hex(cmap(i % cmap.N))
+
+    # ---------- Create tracks for each contig ----------
+    track_names = {contig.id: f"Contig {contig.id}" for contig in contigs}
+    track_dict = {}
+    for contig in contigs:
+        label_kws = {"color": category_colors[contig.category]} if contig.category is not None else None
+        track_dict[contig.id] = gv.add_feature_track(track_names[contig.id], contig.length, label_kws=label_kws)
 
     # ---------- Add features to tracks ----------
-    for contig_id, track in track_dict.items():
-        contig_df = all_contigs_df[all_contigs_df['contig_ID'] == contig_id]
-        for _, row in contig_df.iterrows():
-            is_amr = pd.notna(row.get('ARO'))
-            is_replicon = pd.notna(row.get('replicon'))
-            is_conjugation = pd.notna(row.get('conjugation'))
-            if is_replicon:
-                color = REP_COLOR
-            elif is_conjugation:
-                color = CONJUGATION_COLOR
-            elif is_amr:
-                color = AMR_COLOR
-            else:
-                color = DEF_COLOR
-            alpha = 1.0
-            edgecolor = None
-            linewidth = 0.0
-            if row['type'] == 'pseudo':
-                alpha = 0.2
-                edgecolor = color
-                linewidth = 0.5
-            strand = 1 if row['strand'] == '+' else -1
-            is_wrap = row['start'] > row['end'] # wrap around for circular contigs
-            label = f"{str(row['replicon']).split(' ')[0]}_{int(row['mcl_id'])}" if is_replicon and pd.notna(row['replicon']) and pd.notna(row['mcl_id']) else None
-            if is_wrap: 
-                track.add_feature(
-                    start=row['start'], end=int(contig_df[['start', 'end']].max().max()),
-                    strand=strand,
-                    plotstyle="bigarrow",
-                    label=label,
-                    text_kws={"size": 5},
-                    facecolor=color,
-                    edgecolor=WRAP_COLOR,
-                    alpha=alpha,
-                    lw=0.5,
+    for contig in contigs:
+        track = track_dict[contig.id]
+        for feature in contig.features:
+            color = category_colors.get(feature.category, DEF_COLOR)
+            style = {"facecolor": color, "alpha": 1.0, "edgecolor": None, "lw": 0.0}
+            if feature.type == "pseudo":
+                style.update(alpha=0.2, edgecolor=color, lw=0.5)
+            if feature.start > feature.end:  # wraps around the end of a circular contig
+                style.update(edgecolor=WRAP_COLOR, lw=0.5)
+            for start, end in wrap_segments(feature.start, feature.end, contig.length):
+                track.add_feature(start, end, 1 if feature.strand == "+" else -1, plotstyle="bigarrow", **style)
+
+    # ---------- Add links between protein families of neighboring contigs ----------
+    for contig1, contig2 in zip(contigs, contigs[1:]):
+        for feature1, feature2 in find_links(contig1, contig2):
+            for start1, end1 in wrap_segments(feature1.start, feature1.end, contig1.length):
+                for start2, end2 in wrap_segments(feature2.start, feature2.end, contig2.length):
+                    gv.add_link(
+                        (track_names[contig1.id], start1, end1),
+                        (track_names[contig2.id], start2, end2),
+                        color=LINK_COLOR,
+                        curve=True,
                     )
-                track.add_feature(
-                    start=0, end=row['end'],
-                    strand=strand,
-                    plotstyle="bigarrow",
-                    label=label,
-                    text_kws={"size": 5},
-                    facecolor=color,
-                    edgecolor=WRAP_COLOR,
-                    alpha=alpha,
-                    lw=0.5,
-                    )
-            else:
-                track.add_feature(
-                    start=row['start'], end=row['end'],
-                    strand=strand,
-                    plotstyle="bigarrow",
-                    label=label,
-                    text_kws={"size": 5},
-                    facecolor=color,
-                    edgecolor=edgecolor,
-                    alpha=alpha,
-                    lw=linewidth,
-                    )
-    
-    # ---------- Add links for BLAST hits ----------
-    if blast_results:
-        for (query, subject), blast_df in blast_results.items():
-            filtered_blast_df = blast_df[blast_df['pident'] >= min_identity]  # Filter for high identity hits
-            if filtered_blast_df.empty:
-                continue
-            vmin = filtered_blast_df['pident'].min()
-            for _, hit in filtered_blast_df.iterrows():
-                try:
-                    q_row = all_contigs_df[
-                        (all_contigs_df['contig_ID'] == query) & 
-                        (all_contigs_df['id'] == hit['qseqid'])
-                    ].iloc[0]
-                    s_row = all_contigs_df[
-                        (all_contigs_df['contig_ID'] == subject) & 
-                        (all_contigs_df['id'] == hit['sseqid'])
-                    ].iloc[0]
-                except IndexError:
-                    continue
-                q_wrap = q_row['start'] > q_row['end']
-                s_wrap = s_row['start'] > s_row['end']
-                q_size = int(all_contigs_df[all_contigs_df['contig_ID'] == query][['start', 'end']].max().max())
-                s_size = int(all_contigs_df[all_contigs_df['contig_ID'] == subject][['start', 'end']].max().max())
-                def wrap_segments(row, size):
-                    if row['start'] <= row['end']:
-                        yield (row['start'], row['end'])
-                    else:
-                        yield (row['start'], size)
-                        yield (0, row['end'])
-                for q_seg_start, q_seg_end in wrap_segments(q_row, q_size):
-                    for s_seg_start, s_seg_end in wrap_segments(s_row, s_size):
-                        gv.add_link(
-                            target1=(f"Contig {query}", q_seg_start, q_seg_end),
-                            target2=(f"Contig {subject}", s_seg_start, s_seg_end),
-                            color="grey",
-                            v=hit['pident'],
-                            vmin=vmin,
-                            vmax=100,
-                            curve=True
-                        )
-            gv.set_colorbar(
-                colors=["grey", "grey"],
-                vmin=vmin,
-                vmax=100,
-            )
+
     fig = gv.plotfig()
-    if plasann_replicons:
-        for contig_id, track in track_dict.items():
-            rep_df = plasann_replicons.get(contig_id)
-            if rep_df is None or rep_df.empty:
-                continue
-            contig_df = all_contigs_df[all_contigs_df['contig_ID'] == contig_id]
-            genome_size = int(contig_df[['start', 'end']].max().max())
-            for _, row in rep_df.iterrows():
-                start = int(row['start'])
-                end = int(row['end'])
-                label = row['gene_name']
-                def plot_region(start, end):
-                    ts = track.transform_coord(start)
-                    te = track.transform_coord(end)
-                    x, y = (ts, te, te, ts), (-1, -1, 1, 1)
-                    track.ax.fill(x, y, fc = PLASANN_COLOR, edgecolor='none', zorder=-1)
-                    text_x, text_y = (ts + te) / 2, - 1.5
-                    track.ax.text(text_x, text_y, s=label, ha='center', va='bottom', size=5, color="black")
-                if start <= end:
-                    plot_region(start, end)
-                else:
-                    plot_region(start, genome_size)
-                    plot_region(0, end)
-    if category_colors:
-        handles = [mpatches.Patch(color=color, label=category) for category, color in sorted(category_colors.items())]
+    used = {feature.category for contig in contigs for feature in contig.features} | {contig.category for contig in contigs}
+    handles = [mpatches.Patch(color=color, label=name) for name, color in category_colors.items() if name in used]
+    if handles:
         fig.legend(handles=handles, loc="upper right", title="Category", fontsize=10, title_fontsize=12, handlelength=1.5, handleheight=1.5)
     fig.savefig(output_file)
     return gv, track_dict
