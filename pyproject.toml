@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plot_plasmid"
+version = "0.1.0"
+description = "Plot plasmid contigs from a MySQL database, colored by category and linked by MCL protein family."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "jordiweijers" }]
+dependencies = [
+    "matplotlib>=3.5",
+    "mysql-connector-python>=8.0",
+    "numpy>=1.21",
+    "pygenomeviz>=1.0",
+    "PyYAML>=5.1",
+    "scipy>=1.7",
+]
+
+[project.scripts]
+plot-plasmid = "plot_plasmid.main:main"
+
+[project.urls]
+Repository = "https://github.com/jordiweijers/plot_plasmid"
+
+[tool.setuptools]
+# The code lives in bin/ but is imported as plot_plasmid.
+package-dir = { "plot_plasmid" = "bin" }
+packages = ["plot_plasmid"]

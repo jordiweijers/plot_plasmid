@@ -2,7 +2,6 @@ import argparse
 import os
 from collections import Counter
 from pathlib import Path
-from time import time
 from typing import Dict, List, Optional, Tuple
 
 from plot_plasmid.utils import setup_logging
@@ -12,12 +11,7 @@ from plot_plasmid.models import Contig
 from plot_plasmid.order import order_by_clustering
 from plot_plasmid.plot import plot_contigs
 
-CONTIG_IDS = ["3889", "9353", "10599"]
-DEFAULT_CONFIG_FILE = Path(__file__).parent / "config.yaml"
-PLOT_DIR = "/zfshome/sunam274/compare_plasmids/results/plots"
-
-LOG_DIR = "/zfshome/sunam274/compare_plasmids/results/plotting_data/logs"
-os.makedirs(LOG_DIR, exist_ok=True)
+DEFAULT_CONFIG_FILE = Path(__file__).parent.parent / "config.yaml"
 
 def read_contig_file(file_path: str) -> Tuple[List[str], Dict[str, str]]:
     """
@@ -43,7 +37,7 @@ def read_contig_file(file_path: str) -> Tuple[List[str], Dict[str, str]]:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Plot plasmid contigs with PyGenomeViz")
-    input_group = parser.add_mutually_exclusive_group()
+    input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument(
         "-c", "--contig_ids", type=str, nargs="+", help="List of contig IDs to plot (space-separated)"
     )
@@ -54,10 +48,11 @@ def parse_arguments():
         "-d", "--database", type=str, required=True, help="Name of the database in the config file to load the contigs from"
     )
     parser.add_argument(
-        "--config", type=str, default=str(DEFAULT_CONFIG_FILE), help="Path to the YAML config file (default: config.yaml next to this script)"
+        "--config", type=str, default=str(DEFAULT_CONFIG_FILE), help=f"Path to the YAML config file (default: {DEFAULT_CONFIG_FILE})"
     )
     parser.add_argument(
-        "-o", "--output_file", type=str, default=None, help="Output file path for the plot (e.g. contigs.svg)"
+        "-o", "--output_file", type=str, required=True,
+        help="Output file path for the plot; the extension sets the format (e.g. contigs.svg or contigs.png). A log file <name>.log is written next to it"
     )
     parser.add_argument(
         "-s", "--order-by-similarity", action="store_true",
@@ -97,7 +92,8 @@ def run_plot(
         ValueError: If the database is not in the config file.
     """
     contig_categories = contig_categories or {}
-    logger = setup_logging(os.path.join(LOG_DIR, f"plot_plasmid_{int(time())}.log"))
+    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
+    logger = setup_logging(os.path.splitext(output_file)[0] + ".log")
     config = load_config(Path(config_file))
     if database not in config.databases:
         raise ValueError(f"Unknown database '{database}'. Choose from: {', '.join(config.databases)} or add it to {config_file}.")
@@ -123,7 +119,6 @@ def run_plot(
         logger.info(f"Reordered contigs by protein family similarity: {[contig.id for contig in contigs]}")
 
     # ---------- Plot contigs ----------
-    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
     plot_contigs(contigs, categories, output_file)
     logger.info(f"Saved plot to {output_file}")
     return contigs
@@ -133,19 +128,9 @@ def main():
     contig_categories: Dict[str, str] = {}
     if args.contig_file:
         contig_ids, contig_categories = read_contig_file(args.contig_file)
-    elif args.contig_ids:
+    else:
         contig_ids = args.contig_ids
-    else:
-        contig_ids = CONTIG_IDS
-    if args.output_file:
-        output_file = args.output_file
-    else:
-        if args.contig_file:
-            base = os.path.splitext(os.path.basename(args.contig_file))[0]
-        else:
-            base = '_'.join(contig_ids)
-        output_file = os.path.join(PLOT_DIR, f"{base}.svg")
-    run_plot(contig_ids, output_file, args.database, args.config, args.order_by_similarity, contig_categories, args.refresh_cache)
+    run_plot(contig_ids, args.output_file, args.database, args.config, args.order_by_similarity, contig_categories, args.refresh_cache)
 
 if __name__ == "__main__":
     main()
