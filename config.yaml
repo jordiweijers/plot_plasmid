@@ -87,15 +87,14 @@ databases:
 #   type:      what the IDs refer to: protein, pseudo, family (an MCL family: colours all
 #              its proteins and pseudogenes) or contig (colours the contig label)
 #   database:  the database this category applies to; make another category for another database
-#   query:     path to an SQL file that returns one column of IDs (optional)
+#   query:     path to an SQL file that returns one column of IDs from the whole database (optional)
 #   path:      path to a file with one ID per line; blank lines and lines starting with # are skipped (optional)
 # Give a query, a path, or both:
-#   query only:  the query runs on every plot. Write @contig_id where the contig ID goes;
-#                the query then runs once per contig, which keeps it fast.
+#   query only:  the query runs once on every plot.
 #   path only:   the IDs are read from the file, e.g. a list you made yourself.
-#   both:        the query runs on the whole database once and its IDs are saved at path;
-#                later plots read the file. The query may not use @contig_id, because the
-#                saved IDs have to be valid for every contig.
+#   both:        the query runs once and its IDs are saved at path; later plots read the file.
+#                The query runs again when the SQL file changes, when a table it uses changes,
+#                or with --refresh-cache.
 # Paths are relative to this file. The first category that matches wins, so order sets the priority.
 # In MySQL, REGEXP ignores case; use REGEXP BINARY for a case-sensitive match.
 categories:
@@ -104,6 +103,7 @@ categories:
     type: protein
     database: kes2021
     query: queries/kes2021/amr_proteins.sql
+    path: cache/kes2021/amr_proteins.txt
 
   - name: Replication
     color: '#5e2bff'
@@ -124,6 +124,7 @@ categories:
     type: protein
     database: ESKAPEE25
     query: queries/ESKAPEE25/amr_proteins.sql
+    path: cache/ESKAPEE25/amr_proteins.txt
 
   - name: Replication
     color: '#5e2bff'

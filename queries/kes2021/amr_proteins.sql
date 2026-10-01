@@ -1,5 +1,4 @@
--- Proteins on the contig with an AMR annotation. Runs once per contig.
+-- Proteins with an AMR annotation.
 SELECT DISTINCT a.id
 FROM amr a
 JOIN proteins p ON p.id = a.id
-WHERE p.contig_ID = @contig_id

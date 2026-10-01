@@ -130,7 +130,7 @@ def _parse_category(entry: dict, config_dir: Path, databases: Dict[str, Database
         CategoryRule: The category rule, with its query and path resolved relative to the config file.
     Raises:
         ValueError: If a key is missing or unknown, the type, database or color is invalid, neither query nor path is given,
-            a file does not exist, or a query whose IDs are saved at path uses @contig_id.
+            a file does not exist, or the query uses @contig_id.
     """
     try:
         name, color, type_, database = entry["name"], entry["color"], entry["type"], entry["database"]
@@ -153,10 +153,10 @@ def _parse_category(entry: dict, config_dir: Path, databases: Dict[str, Database
     if query is not None:
         if not query.is_file():
             raise ValueError(f"The query of category '{name}' does not exist: {query}")
-        if path is not None and "@contig_id" in query.read_text():
+        if "@contig_id" in query.read_text():
             raise ValueError(
-                f"The query of category '{name}' uses @contig_id, so its IDs depend on the contig and cannot be saved at path. "
-                f"Remove the path to run the query for each contig, or remove @contig_id to query the whole database."
+                f"The query of category '{name}' uses @contig_id, but queries run on the whole database, not per contig. "
+                f"Remove @contig_id from {query}."
             )
     elif not path.is_file():
         raise ValueError(f"The path of category '{name}' does not exist: {path}")

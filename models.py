@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Literal, Tuple
+from typing import List, Optional, Literal, Set, Tuple
 
 
 @dataclass
@@ -17,6 +17,14 @@ class Feature:
     @property
     def key(self) -> Tuple[str, str]:
         return (self.id, self.type)
+
+
+@dataclass
+class Category:
+    name: str
+    color: str
+    type: Literal["protein", "pseudo", "family", "contig"]
+    ids: Set[str]
 
 
 @dataclass

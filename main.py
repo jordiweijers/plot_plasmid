@@ -1,5 +1,6 @@
 import argparse
 import os
+from collections import Counter
 from pathlib import Path
 from time import time
 from typing import Dict, List, Optional, Tuple
@@ -61,6 +62,10 @@ def parse_arguments():
         "-s", "--order-by-similarity", action="store_true",
         help="Reorder contigs by similarity of their protein families instead of the input order"
     )
+    parser.add_argument(
+        "--refresh-cache", action="store_true",
+        help="Rerun the queries of categories that have both a query and a path, and overwrite their saved lists even if they are up to date"
+    )
     return parser.parse_args()
 
 def run_plot(
@@ -70,6 +75,7 @@ def run_plot(
         config_file: str = str(DEFAULT_CONFIG_FILE),
         order_by_similarity: bool = False,
         contig_categories: Optional[Dict[str, str]] = None,
+        refresh_cache: bool = False,
     ) -> List[Contig]:
     """
     Load the given contigs from the database and plot them.
@@ -83,6 +89,7 @@ def run_plot(
         config_file (str): The path to the YAML config file.
         order_by_similarity (bool): Whether to reorder contigs by similarity of their protein families.
         contig_categories (Optional[Dict[str, str]]): A dictionary mapping contig ID to a category label for track-label coloring.
+        refresh_cache (bool): Whether to rerun the queries of categories with a saved list, even if the list is up to date.
     Returns:
         List[Contig]: The loaded contigs.
     Raises:
@@ -97,10 +104,16 @@ def run_plot(
     # ---------- Get contig data ----------
     contigs = []
     with ContigLoader(database, config.databases[database], config.host, config.user) as loader:
+        categories = loader.load_categories(config.categories, refresh_cache)
         for contig_id in contig_ids:
-            contig = loader.fetch_contig(contig_id)
-            contig.category = contig_categories.get(contig.id)
-            logger.info(f"Loaded contig {contig.id} from {database}: {contig.length} bp, {len(contig.features)} features")
+            contig = loader.fetch_contig(contig_id, categories)
+            contig.category = contig_categories.get(contig.id, contig.category)
+            category_counts = Counter(feature.category for feature in contig.features if feature.category is not None)
+            logger.info(
+                f"Loaded contig {contig.id} from {database}: {contig.length} bp, {len(contig.features)} features"
+                + "".join(f", {count} {category}" for category, count in category_counts.items())
+                + (f", category {contig.category}" if contig.category else "")
+            )
             contigs.append(contig)
 
     # ---------- Order contigs ----------
@@ -126,7 +139,7 @@ def main():
         else:
             base = '_'.join(contig_ids)
         output_file = os.path.join(PLOT_DIR, f"{base}.svg")
-    run_plot(contig_ids, output_file, args.database, args.config, args.order_by_similarity, contig_categories)
+    run_plot(contig_ids, output_file, args.database, args.config, args.order_by_similarity, contig_categories, args.refresh_cache)
 
 if __name__ == "__main__":
     main()

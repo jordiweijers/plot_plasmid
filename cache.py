@@ -1,4 +1,5 @@
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional, Set, Tuple
@@ -64,24 +65,37 @@ def write_ids(path: Path, ids: Iterable[str], query: Path, created: datetime) ->
         created (datetime): When the query started, so table changes made while it ran make the list out of date.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    tmp_path = path.with_name(path.name + ".tmp")
+    with open(tmp_path, "w") as f:
         f.write(f"# query: {query}\n")
         f.write(f"# query_sha256: {query_hash(query)}\n")
         f.write(f"# created: {created.strftime(DATE_FORMAT)}\n")
         for id in sorted(ids):
             f.write(f"{id}\n")
+    os.replace(tmp_path, path)
 
-
-def is_fresh(path: Path, query: Path, tables_changed: Optional[datetime]) -> Tuple[bool, str]:
+def is_fresh(
+        path: Optional[Path],
+        query: Optional[Path],
+        tables_changed: Optional[datetime],
+        refresh_cache: bool = False,
+    ) -> Tuple[bool, str]:
     """
-    Check whether a saved list can be used instead of running its query again.
+    Check whether a category's list can be read from its path instead of running its query.
     Args:
-        path (Path): The path to the saved list.
-        query (Path): The path to the SQL file that makes the list.
+        path (Optional[Path]): The path to the list, or None if the category has none.
+        query (Optional[Path]): The path to the SQL file that makes the list, or None if the category has none.
         tables_changed (Optional[datetime]): The latest change to the tables the query uses, or None if unknown.
+        refresh_cache (bool): Whether to rerun the query even if its saved list is up to date.
     Returns:
-        Tuple[bool, str]: Whether the list is fresh, and the reason, for logging.
+        Tuple[bool, str]: Whether the list can be read from path, and the reason, for logging.
     """
+    if query is None:
+        return True, "it has no query"
+    if path is None:
+        return False, "it has no path to save its IDs"
+    if refresh_cache:
+        return False, "--refresh-cache was given"
     if not path.is_file():
         return False, "it does not exist yet"
     header = read_header(path)
