@@ -104,7 +104,7 @@ def run_plot(
         categories = loader.load_categories(config.categories, refresh_cache)
         for contig_id in contig_ids:
             contig = loader.fetch_contig(contig_id, categories)
-            contig.category = contig_categories.get(contig.id, contig.category)
+            contig.category = contig_categories.get(contig.source_id, contig.category)
             category_counts = Counter(feature.category for feature in contig.features if feature.category is not None)
             logger.info(
                 f"Loaded contig {contig.id} from {database}: {contig.length} bp, {len(contig.features)} features"
@@ -116,7 +116,7 @@ def run_plot(
     # ---------- Order contigs ----------
     if order_by_similarity:
         contigs = order_by_clustering(contigs)
-        logger.info(f"Reordered contigs by protein family similarity: {[contig.id for contig in contigs]}")
+        logger.info(f"Reordered contigs by protein family similarity: {[str(contig.id) for contig in contigs]}")
 
     # ---------- Plot contigs ----------
     plot_contigs(contigs, categories, output_file)

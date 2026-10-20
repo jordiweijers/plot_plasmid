@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from pygenomeviz import GenomeViz
 from pygenomeviz.track import FeatureTrack
 
-from plot_plasmid.models import Category, Contig, Feature
+from plot_plasmid.models import Category, Contig, ContigID, FamilyID, Feature
 
 DEF_COLOR = "#ff8800"
 WRAP_COLOR = "#ff0000"
@@ -40,7 +40,7 @@ def find_links(contig1: Contig, contig2: Contig) -> List[Tuple[Feature, Feature]
     Returns:
         List[Tuple[Feature, Feature]]: Each pair of a feature on contig1 and a feature on contig2 in the same protein family.
     """
-    family_features: Dict[str, List[Feature]] = {}
+    family_features: Dict[FamilyID, List[Feature]] = {}
     for feature in contig2.features:
         if feature.protein_family is not None:
             family_features.setdefault(feature.protein_family, []).append(feature)
@@ -55,7 +55,7 @@ def plot_contigs(
         contigs: List[Contig],
         categories: List[Category],
         output_file: str,
-    ) -> Tuple[GenomeViz, Dict[str, FeatureTrack]]:
+    ) -> Tuple[GenomeViz, Dict[ContigID, FeatureTrack]]:
     """
     Plot the contigs from top to bottom with pygenomeviz, coloring features and contig labels by category and linking
     the features of neighboring contigs that are in the same protein family.
@@ -66,7 +66,7 @@ def plot_contigs(
             list, such as those from a contig file, get a color from the tab10 colormap.
         output_file (str): The path to the output file.
     Returns:
-        Tuple[GenomeViz, Dict[str, FeatureTrack]]: the GenomeViz figure object and a dict mapping
+        Tuple[GenomeViz, Dict[ContigID, FeatureTrack]]: the GenomeViz figure object and a dict mapping
             contig ID to its FeatureTrack -- callers that want to add more to the figure (e.g. an
             extra subtrack) can add it to a track here and call `gv.plotfig()` again themselves to
             re-render including the addition.
