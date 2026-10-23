@@ -7,7 +7,7 @@ name = "plot_plasmid"
 version = "0.1.0"
 description = "Plot plasmid contigs from a MySQL database, colored by category and linked by MCL protein family."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [{ name = "jordiweijers" }]
 dependencies = [
     "matplotlib>=3.5",

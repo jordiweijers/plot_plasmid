@@ -2,80 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Literal, Optional, Tuple
-
+from typing import List, Literal, Optional, Tuple
 import yaml
 from matplotlib.colors import is_color_like
 
+from plot_plasmid.database import ContigSource, DatabaseSchema, FeatureSource
+
 CATEGORY_TYPES = ("protein", "pseudo", "family", "contig")
-
-
-@dataclass(frozen=True)
-class FeatureSource:
-    """
-    Describes how one table of features is structured in the database.
-    Attributes:
-        table (str): The name of the table containing the features.
-        id_column (str): The name of the column containing feature IDs.
-        contig_column (str): The name of the column containing contig IDs.
-        is_pseudo (str): The SQL boolean expression to determine if a feature is a pseudogene.
-        mcl_table (str): The name of the MCL table.
-        mcl_id_column (str): The name of the column containing feature IDs in the MCL table.
-        mcl_family_column (str): The name of the column containing MCL family IDs.
-    """
-    table: str
-    id_column: str
-    contig_column: str
-    is_pseudo: str
-    mcl_table: str
-    mcl_id_column: str
-    mcl_family_column: str
-
-
-@dataclass(frozen=True)
-class ContigSource:
-    """
-    Describes how one table of contigs is structured in the database.
-    Attributes:
-        table (str): The name of the table containing the contigs.
-        id_column (str): The name of the column containing contig IDs.
-        length_column (str): The name of the column containing contig lengths.
-    """
-    table: str
-    id_column: str
-    length_column: str
-
-
-@dataclass(frozen=True)
-class DatabaseSchema:
-    """
-    Describes the schema of the database, including contigs and features tables.
-    Attributes:
-        contigs (ContigSource): The source of the contigs table.
-        features (Tuple[FeatureSource, ...]): The sources of the features tables.
-    """
-    contigs: ContigSource
-    features: Tuple[FeatureSource, ...]
-
-
-@dataclass(frozen=True)
-class CategoryRule:
-    """
-    Assigns a category to the proteins, pseudogenes, protein families or contigs whose IDs are listed in a file or returned by an SQL query.
-    Attributes:
-        name (str): The category label shown in the plot legend.
-        color (str): The color of the features or contig labels in this category.
-        type (str): What the IDs refer to: "protein", "pseudo", "family" or "contig".
-        database (str): The database this category applies to.
-        query (Optional[Path]): The path to an SQL file that returns one column of IDs, if any.
-        path (Optional[Path]): The path to a file with one ID per line, if any. With a query, the query's IDs are saved here and reused.
-    """
-    name: str
-    color: str
-    type: Literal["protein", "pseudo", "family", "contig"]
-    database: str
-    query: Optional[Path] = None
-    path: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -90,7 +23,7 @@ class Config:
     """
     host: str
     user: str
-    databases: Dict[str, DatabaseSchema]
+    databases: List[DatabaseSchema]
     categories: Tuple[CategoryRule, ...]
 
 
@@ -106,17 +39,13 @@ def _parse_schema(database: str, entry: dict) -> DatabaseSchema:
         ValueError: If a key is missing or unknown, or is_pseudo is not a string.
     """
     try:
-        contigs = ContigSource(**entry["contigs"])
-        features = tuple(FeatureSource(**source) for source in entry["features"])
-    except (KeyError, TypeError) as e:
-        raise ValueError(f"Invalid schema for database '{database}': {e}") from e
-    for source in features:
-        if not isinstance(source.is_pseudo, str):
-            raise ValueError(
-                f"is_pseudo of table '{source.table}' in database '{database}' must be a string with an SQL expression, "
-                f"got {source.is_pseudo!r}. Put quotes around it in the config file, e.g. \"FALSE\"."
-            )
-    return DatabaseSchema(contigs=contigs, features=features)
+        return DatabaseSchema(
+            database=database,
+            contigs=ContigSource(**entry["contigs"]),
+            features=[FeatureSource(**source) for source in entry["features"]],
+        )
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"Invalid schema for database '{database}' in the config file: {e}") from e
 
 
 def _parse_category(entry: dict, config_dir: Path, databases: Dict[str, DatabaseSchema]) -> CategoryRule:

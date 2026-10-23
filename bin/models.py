@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Literal
 from matplotlib.colors import is_color_like
 
-logger = logging.getLogger("main_logger")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, order=True)
@@ -45,7 +45,7 @@ class Feature:
     end: int
     strand: Literal["+", "-"]
     protein_family: Optional[FamilyID] = None
-    category: Optional[str] = None
+    category: Optional[Category] = None
 
     @property
     def id(self) -> FeatureID:
@@ -56,12 +56,10 @@ class Feature:
         return self.start > self.end
 
 
-@dataclass
+@dataclass(frozen=True)
 class Category:
     name: str
     color: str
-    type: Literal["protein", "pseudo", "family", "contig"]
-    ids: List[str]
 
     def __post_init__(self):
         if not is_color_like(self.color):
@@ -82,7 +80,7 @@ class Contig:
     topology: Literal["linear", "circular"]
     features: List[Feature]
     regions: Optional[List[Region]] = None
-    category: Optional[str] = None
+    category: Optional[Category] = None
 
     def __post_init__(self):
         if self.start < 1 or self.end < 1:
