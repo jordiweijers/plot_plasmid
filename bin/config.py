@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple
+from typing import List, Tuple
 import yaml
 from matplotlib.colors import is_color_like
 

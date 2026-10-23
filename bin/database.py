@@ -94,14 +94,16 @@ class Database:
 
     def columns(self,  query: str, params: Tuple = ()) -> List[str]:
         """
-        Get the column names of the result of a query. And additionally check that the query is a single SELECT statement and correct syntax
+        Get the column names of the result of a query. And additionally check that the query is a single SELECT statement and correct syntax.
+        The query is wrapped in a subquery that returns no rows, so it is checked without running it. Because of that, the
+        columns of the query must have unique names: give duplicates an alias, e.g. SELECT a.id, b.id AS other_id.
         Args:
             query (str): The SQL query, with %s for each parameter.
             params (tuple): The parameters of the query.
         Returns:
             List[str]: The column names of the result.
         Raises:
-            ValueError: If the query is not a single SELECT statement or has incorrect syntax.
+            ValueError: If the query is not a single SELECT statement, has incorrect syntax or has duplicate column names.
         """
         checked = f"SELECT * FROM (\n{query.strip().rstrip(';')}\n) AS checked LIMIT 0"
         with self.conn.cursor() as cursor:
@@ -110,7 +112,7 @@ class Database:
                 columns = [desc[0] for desc in cursor.description]
                 cursor.fetchall()
             except mysql.connector.Error as e:
-                raise ValueError(f"Query is not a single SELECT statement or has incorrect syntax that database '{self.name}' cannot execute.") from e
+                raise ValueError(f"Query is not a single SELECT statement or has incorrect syntax that database '{self.name}' cannot execute: {e}") from e
         return columns
 
     def query(self, query: str, params: Tuple = ()) -> List[dict]:
@@ -122,6 +124,7 @@ class Database:
         Returns:
             List[dict]: The rows, as dictionaries from column name to value.
         Raises:
+            ValueError: If the query is not a single SELECT statement, has incorrect syntax or has duplicate column names.
             KeyboardInterrupt: If Ctrl+C is pressed while the query runs.
         """
         result = {}

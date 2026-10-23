@@ -1,7 +1,8 @@
 import hashlib
 import logging
 import os
-from datetime import datetime, time
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional, Set, Tuple, Dict
 
@@ -24,6 +25,10 @@ def load_ids(database: Database, query: str, cache: Optional[Path] = None, refre
         refresh (bool): Whether to run the query even if its saved IDs are up to date.
     Returns:
         Set[str]: The IDs, as strings.
+    Raises:
+        ValueError: If the query uses @contig_id, is not a single SELECT statement, does not return exactly one column,
+            or the IDs in the cache file were changed by hand.
+        RuntimeError: If MySQL fails to run the query.
     """
     if cache is None:
         start = time.monotonic()
@@ -93,6 +98,8 @@ def _is_fresh(cache: Path, database: Database, query: str, refresh: bool) -> Tup
         refresh (bool): Whether to run the query even if its saved IDs are up to date.
     Returns:
         Tuple[bool, str]: Whether the saved IDs can be used, and the reason, for logging.
+    Raises:
+        ValueError: If the IDs in the cache file were changed by hand.
     """
     if refresh:
         return False, "a refresh was asked"

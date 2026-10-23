@@ -2,54 +2,58 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, ClassVar, Union
 from matplotlib.colors import is_color_like
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, order=True)
-class FeatureID:
+class ID:
     source_id: str
-    type: Literal["protein", "pseudo"]
+    type: ClassVar[str]
 
     def __str__(self) -> str:
         return f"{self.source_id}:{self.type}"
 
 
 @dataclass(frozen=True, order=True)
-class ContigID:
-    source_id: str
-    start: Optional[int] = None
-    end: Optional[int] = None
+class ProteinID(ID):
+    type: ClassVar[str] = "protein"
 
-    def __str__(self) -> str:
-        if self.start is None:
-            return self.source_id
-        return f"{self.source_id}:{self.start}-{self.end}"
+    
+@dataclass(frozen=True, order=True)
+class PseudoID(ID):
+    type: ClassVar[str] = "pseudo"
 
 
 @dataclass(frozen=True, order=True)
-class FamilyID:
-    source_id: str
+class ContigID(ID):
+    type: ClassVar[str] = "contig"
+
+
+@dataclass(frozen=True, order=True)
+class PartialContigID(ContigID):
+    start: int
+    end: int
 
     def __str__(self) -> str:
-        return self.source_id
+        return f"{self.source_id}:{self.type}:{self.start}-{self.end}"
+
+
+@dataclass(frozen=True, order=True)
+class FamilyID(ID):
+    type: ClassVar[str] = "family"
     
 
 @dataclass
 class Feature:
-    source_id: str
-    type: Literal["protein", "pseudo"]
+    id: Union[ProteinID, PseudoID]
     start: int
     end: int
     strand: Literal["+", "-"]
     protein_family: Optional[FamilyID] = None
     category: Optional[Category] = None
-
-    @property
-    def id(self) -> FeatureID:
-        return FeatureID(source_id=self.source_id, type=self.type)
 
     @property
     def wraps(self) -> bool:
@@ -58,7 +62,7 @@ class Feature:
 
 @dataclass(frozen=True)
 class Category:
-    name: str
+    label: str
     color: str
 
     def __post_init__(self):
@@ -74,7 +78,7 @@ class Region:
 
 @dataclass(kw_only=True)
 class Contig:
-    source_id: str
+    id: ContigID
     start: int
     end: int
     topology: Literal["linear", "circular"]
@@ -89,10 +93,6 @@ class Contig:
             raise ValueError(f"Contig {self.id} must start before it ends, but runs from {self.start} to {self.end}.")
         if self.topology == "linear" and any(feature.wraps for feature in self.features):
             raise ValueError(f"Linear contig {self.id} cannot have features that wrap around the origin.")
-
-    @property
-    def id(self) -> ContigID:
-        return ContigID(source_id=self.source_id)
 
     @property
     def length(self) -> int:
@@ -131,7 +131,7 @@ class Contig:
                 border_features.append(feature)
 
         partial = PartialContig(
-            source_id=self.source_id,
+            id=PartialContigID(source_id=self.id.source_id, start=start, end=end),
             start=start,
             end=end,
             topology="linear",
@@ -150,8 +150,4 @@ class Contig:
 @dataclass(kw_only=True)
 class PartialContig(Contig):
     border_features: List[Feature] =field(default_factory=list)
-
-    @property
-    def id(self) -> ContigID:
-        return ContigID(source_id=self.source_id, start=self.start, end=self.end)
         

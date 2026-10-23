@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from pygenomeviz import GenomeViz
 from pygenomeviz.track import FeatureTrack
 
-from plot_plasmid.models import Category, Contig, ContigID, FamilyID, Feature
+from plot_plasmid.models import Category, Contig, ContigID, FamilyID, Feature, PseudoID
 
 DEF_COLOR = "#ff8800"
 WRAP_COLOR = "#ff0000"
@@ -77,7 +77,7 @@ def plot_contigs(
     # ---------- Create a color mapping for the categories ----------
     category_colors: Dict[str, str] = {}
     for category in categories:
-        category_colors.setdefault(category.name, category.color)
+        category_colors.setdefault(category.label, category.color)
     other_categories = sorted({contig.category for contig in contigs if contig.category is not None} - set(category_colors))
     cmap = plt.get_cmap("tab10")
     for i, name in enumerate(other_categories):
@@ -96,7 +96,7 @@ def plot_contigs(
         for feature in contig.features:
             color = category_colors.get(feature.category, DEF_COLOR)
             style = {"facecolor": color, "alpha": 1.0, "edgecolor": None, "lw": 0.0}
-            if feature.type == "pseudo":
+            if isinstance(feature.id, PseudoID):
                 style.update(alpha=0.2, edgecolor=color, lw=0.5)
             if feature.start > feature.end:  # wraps around the end of a circular contig
                 style.update(edgecolor=WRAP_COLOR, lw=0.5)
