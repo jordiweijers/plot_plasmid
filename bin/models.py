@@ -44,6 +44,10 @@ class PartialContigID(ContigID):
 @dataclass(frozen=True, order=True)
 class FamilyID(ID):
     type: ClassVar[str] = "family"
+
+
+# The kinds of ID a category rule can hold, by their type, e.g. to turn "protein" in a categories file into ProteinID.
+ID_CLASSES = {id_class.type: id_class for id_class in (ProteinID, PseudoID, ContigID, FamilyID)}
     
 
 @dataclass

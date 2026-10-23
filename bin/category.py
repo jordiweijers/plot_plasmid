@@ -2,13 +2,11 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, FrozenSet, Iterable, Literal, Optional, Sequence, Set, Tuple, Union
+from typing import Dict, FrozenSet, Iterable, Optional, Sequence, Set, Tuple, Type, Union
 
 from plot_plasmid.cache import load_ids, read_ids
 from plot_plasmid.database import Database
-from plot_plasmid.models import Category, Contig, ContigID, FamilyID, Feature, ProteinID, PseudoID
-
-ID_TYPES = ("protein", "pseudo", "family", "contig")
+from plot_plasmid.models import ID_CLASSES, Category, Contig, ContigID, FamilyID, Feature, ProteinID, PseudoID
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +25,10 @@ class CategoryRule:
     def __post_init__(self):
         # A frozen dataclass can only set its fields through object.__setattr__.
         object.__setattr__(self, "ids", frozenset(self.ids))
-        wrong = [id for id in self.ids if not isinstance(id, (ProteinID, PseudoID, ContigID, FamilyID))]
+        wrong = [id for id in self.ids if type(id) not in ID_CLASSES.values()]
         if wrong:
             raise TypeError(
-                f"The IDs of category rule '{self.category.label}' must be ProteinID, PseudoID, ContigID or FamilyID, so they say what they refer to, but include {wrong[0]!r}."
+                f"The IDs of category rule '{self.category.label}' must be one of {', '.join(id_class.__name__ for id_class in ID_CLASSES.values())}, but include {wrong[0]!r}."
             )
 
     @classmethod
@@ -38,7 +36,7 @@ class CategoryRule:
             cls,
             database: Database,
             category: Category,
-            type: Literal["protein", "pseudo", "family", "contig"],
+            id_class: Type[Union[ProteinID, PseudoID, ContigID, FamilyID]],
             query: str,
             cache: Optional[Path] = None,
             refresh: bool = False,
@@ -48,18 +46,18 @@ class CategoryRule:
         Args:
             database (Database): The database to run the query on.
             category (Category): The category to assign.
-            type (Literal["protein", "pseudo", "family", "contig"]): What the IDs the query returns refer to.
+            id_class (Type[Union[ProteinID, PseudoID, ContigID, FamilyID]]): What the IDs the query returns refer to, e.g. ProteinID.
             query (str): An SQL query that returns one column of IDs from the whole database.
             cache (Optional[Path]): The Path where to save the IDs in, or None to always run the query.
             refresh (bool): Whether to run the query even if its saved IDs are up to date.
         Returns:
             CategoryRule: The rule.
         Raises:
-            ValueError: If the type is unknown, the query uses @contig_id or does not return one column.
+            ValueError: If id_class is not one of the ID classes, the query uses @contig_id or does not return one column.
             RuntimeError: If MySQL fails to run the query.
         """
-        if type not in ID_TYPES:
-            raise ValueError(f"Category '{category.label}' has type {type!r}, which must be one of: {', '.join(ID_TYPES)}.")
+        if id_class not in ID_CLASSES.values():
+            raise ValueError(f"Category '{category.label}' has IDs of class {id_class!r}, which must be one of {', '.join(id_class.__name__ for id_class in ID_CLASSES.values())}.")
         try:
             source_ids = load_ids(database, query, cache, refresh)
         except (RuntimeError, ValueError) as e:
@@ -67,7 +65,7 @@ class CategoryRule:
             raise
         if not source_ids:
             logger.warning(f"Category '{category.label}': The query returned no IDs, so the rule matches nothing")
-        rule = cls(category=category, ids=frozenset(_make_id(type, source_id) for source_id in source_ids))
+        rule = cls(category=category, ids=frozenset(id_class(source_id) for source_id in source_ids))
         logger.info(f"Category '{category.label}': {len(rule.ids)} IDs from its query")
         return rule
 
@@ -75,28 +73,28 @@ class CategoryRule:
     def from_file(
             cls,
             category: Category,
-            type: Literal["protein", "pseudo", "family", "contig"],
+            id_class: Type[Union[ProteinID, PseudoID, ContigID, FamilyID]],
             path: Path,
         ) -> "CategoryRule":
         """
         Make a rule from the IDs in a file.
         Args:
             category (Category): The category to assign.
-            type (Literal["protein", "pseudo", "family", "contig"]): What the IDs in the file refer to.
+            id_class (Type[Union[ProteinID, PseudoID, ContigID, FamilyID]]): What the IDs in the file refer to, e.g. ProteinID.
             path (Path): A file with one ID per line. Blank lines and lines starting with # are skipped, so a cache
                 file of from_query can be read as well.
         Returns:
             CategoryRule: The rule.
         Raises:
-            ValueError: If the type is unknown.
+            ValueError: If id_class is not one of the ID classes.
             FileNotFoundError: If the file does not exist.
         """
-        if type not in ID_TYPES:
-            raise ValueError(f"Category '{category.label}' has type {type!r}, which must be one of: {', '.join(ID_TYPES)}.")
+        if id_class not in ID_CLASSES.values():
+            raise ValueError(f"Category '{category.label}' has IDs of class {id_class!r}, which must be one of {', '.join(id_class.__name__ for id_class in ID_CLASSES.values())}.")
         source_ids = read_ids(path)
         if not source_ids:
             logger.warning(f"Category '{category.label}': {path} contains no IDs, so the rule matches nothing")
-        rule = cls(category=category, ids=frozenset(_make_id(type, source_id) for source_id in source_ids))
+        rule = cls(category=category, ids=frozenset(id_class(source_id) for source_id in source_ids))
         logger.info(f"Category '{category.label}': {len(rule.ids)} IDs from {path}")
         return rule
 
@@ -147,24 +145,3 @@ def _assign(
     if winner is not None:
         item.category = winner
 
-
-def _make_id(type: Literal["protein", "pseudo", "family", "contig"], source_id: str) -> Union[ProteinID, PseudoID, ContigID, FamilyID]:
-    """
-    Turn an ID from the database into an ID of the pipeline.
-    Args:
-        type (Literal["protein", "pseudo", "family", "contig"]): What the ID refers to.
-        source_id (str): The ID in the database.
-    Returns:
-        Union[ProteinID, PseudoID, ContigID, FamilyID]: A ContigID, FamilyID, ProteinID or PseudoID.
-    Raises:
-        ValueError: If the type is not one of "protein", "pseudo", "family", "contig".
-    """
-    if type == "contig":
-        return ContigID(source_id=source_id)
-    if type == "family":
-        return FamilyID(source_id=source_id)
-    if type == "protein":
-        return ProteinID(source_id=source_id)
-    if type == "pseudo":
-        return PseudoID(source_id=source_id)
-    raise ValueError(f"Unknown ID type: {type!r}")
