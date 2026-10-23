@@ -5,13 +5,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from plot_plasmid.utils import setup_logging
-from plot_plasmid.config import load_config
-from plot_plasmid.database import ContigLoader
+from plot_plasmid.loader import ContigLoader
 from plot_plasmid.models import Contig
 from plot_plasmid.order import order_by_clustering
 from plot_plasmid.plot import plot_contigs
-
-DEFAULT_CONFIG_FILE = Path(__file__).parent.parent / "config.yaml"
+from plot_plasmid.schemas import SCHEMAS
 
 def read_contig_file(file_path: str) -> Tuple[List[str], Dict[str, str]]:
     """
@@ -45,10 +43,7 @@ def parse_arguments():
         "-f", "--contig_file", type=str, help="Path to a file with one contig ID per line, optionally followed by a tab and a category for label coloring"
     )
     parser.add_argument(
-        "-d", "--database", type=str, required=True, help="Name of the database in the config file to load the contigs from"
-    )
-    parser.add_argument(
-        "--config", type=str, default=str(DEFAULT_CONFIG_FILE), help=f"Path to the YAML config file (default: {DEFAULT_CONFIG_FILE})"
+        "-d", "--database", type=str, required=True, choices=sorted(SCHEMAS), help="Name of the database to load the contigs from"
     )
     parser.add_argument(
         "-o", "--output_file", type=str, required=True,
@@ -68,7 +63,6 @@ def run_plot(
         contig_ids: List[str],
         output_file: str,
         database: str,
-        config_file: str = str(DEFAULT_CONFIG_FILE),
         order_by_similarity: bool = False,
         contig_categories: Optional[Dict[str, str]] = None,
         refresh_cache: bool = False,
@@ -81,22 +75,21 @@ def run_plot(
     Args:
         contig_ids (List[str]): A list of contig IDs to plot.
         output_file (str): The path to the output file.
-        database (str): The name of the database in the config file to load the contigs from.
-        config_file (str): The path to the YAML config file.
+        database (str): The name of the database in SCHEMAS to load the contigs from.
         order_by_similarity (bool): Whether to reorder contigs by similarity of their protein families.
         contig_categories (Optional[Dict[str, str]]): A dictionary mapping contig ID to a category label for track-label coloring.
         refresh_cache (bool): Whether to rerun the queries of categories with a saved list, even if the list is up to date.
     Returns:
         List[Contig]: The loaded contigs.
     Raises:
-        ValueError: If the database is not in the config file.
+        ValueError: If the database is not in SCHEMAS.
     """
     contig_categories = contig_categories or {}
     os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
     logger = setup_logging(os.path.splitext(output_file)[0] + ".log")
-    config = load_config(Path(config_file))
-    if database not in config.databases:
-        raise ValueError(f"Unknown database '{database}'. Choose from: {', '.join(config.databases)} or add it to {config_file}.")
+    if database not in SCHEMAS:
+        raise ValueError(f"Unknown database '{database}'. Choose from: {', '.join(sorted(SCHEMAS))} or add it to plot_plasmid/schemas.py.")
+    schema = SCHEMAS[database]
 
     # ---------- Get contig data ----------
     contigs = []
@@ -130,7 +123,7 @@ def main():
         contig_ids, contig_categories = read_contig_file(args.contig_file)
     else:
         contig_ids = args.contig_ids
-    run_plot(contig_ids, args.output_file, args.database, args.config, args.order_by_similarity, contig_categories, args.refresh_cache)
+    run_plot(contig_ids, args.output_file, args.database, args.order_by_similarity, contig_categories, args.refresh_cache)
 
 if __name__ == "__main__":
     main()

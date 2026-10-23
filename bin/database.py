@@ -1,63 +1,14 @@
 import logging
 import re
 import threading
-from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Tuple
 import mysql.connector
 from mysql.connector.constants import ClientFlag
 
+from plot_plasmid.schemas import DatabaseSchema
+
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class FeatureSource:
-    """
-    Describes how one table of features is structured in the database.
-    Attributes:
-        table (str): The name of the table containing the features.
-        id_column (str): The name of the column containing feature IDs.
-        contig_column (str): The name of the column containing contig IDs.
-        is_pseudo (str): The SQL boolean expression to determine if a feature is a pseudogene.
-        mcl_table (str): The name of the MCL table.
-        mcl_id_column (str): The name of the column containing feature IDs in the MCL table.
-        mcl_family_column (str): The name of the column containing MCL family IDs.
-    """
-    table: str
-    id_column: str
-    contig_column: str
-    is_pseudo: str
-    mcl_table: str
-    mcl_id_column: str
-    mcl_family_column: str
-
-
-@dataclass(frozen=True)
-class ContigSource:
-    """
-    Describes how one table of contigs is structured in the database.
-    Attributes:
-        table (str): The name of the table containing the contigs.
-        id_column (str): The name of the column containing contig IDs.
-        length_column (str): The name of the column containing contig lengths.
-    """
-    table: str
-    id_column: str
-    length_column: str
-
-
-@dataclass(frozen=True)
-class DatabaseSchema:
-    """
-    Describes the schema of the database, including contigs and features tables.
-    Attributes:
-        database (str): The name of the database.
-        contigs (ContigSource): The source of the contigs table.
-        features (List[FeatureSource]): The sources of the features tables.
-    """
-    database: str
-    contigs: ContigSource
-    features: List[FeatureSource]
 
 
 class Database:
@@ -65,13 +16,13 @@ class Database:
     Represents a connection to a MySQL database and provides methods to read from it. It only runs single SELECT
     queries, so it cannot change the database, even with a user that may.
     """
-    def __init__(self, schema: DatabaseSchema, host: str, user: str):
+    def __init__(self, schema: DatabaseSchema):
         self.schema = schema
         self.name = schema.database
-        self.host = host
-        self.user = user
+        self.host = schema.host
+        self.user = schema.user
         # Without this flag the server runs every statement in a query, so "SELECT ...; DROP ..." would drop.
-        self.conn = mysql.connector.connect(host=host, user=user, database=self.name, client_flags=[-ClientFlag.MULTI_STATEMENTS])
+        self.conn = mysql.connector.connect(host=self.host, user=self.user, database=self.name, client_flags=[-ClientFlag.MULTI_STATEMENTS])
 
     def __enter__(self) -> "Database":
         return self
