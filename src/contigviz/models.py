@@ -48,20 +48,6 @@ class FamilyID(ID):
 
 # The kinds of ID a category rule can hold, by their type, e.g. to turn "protein" in a categories file into ProteinID.
 ID_CLASSES = {id_class.type: id_class for id_class in (ProteinID, PseudoID, ContigID, FamilyID)}
-    
-
-@dataclass
-class Feature:
-    id: Union[ProteinID, PseudoID]
-    start: int
-    end: int
-    strand: Literal["+", "-"]
-    protein_family: Optional[FamilyID] = None
-    category: Optional[Category] = None
-
-    @property
-    def wraps(self) -> bool:
-        return self.start > self.end
 
 
 @dataclass(frozen=True)
@@ -75,13 +61,44 @@ class Category:
 
 @dataclass
 class Region:
+    """
+    A named stretch of a contig. Coordinates are 1-based and inclusive, like those of Feature and Contig.
+    """
     id: str
     start: int
     end: int
 
 
+@dataclass
+class Feature:
+    """
+    A protein or pseudogene on a contig. Coordinates are 1-based and inclusive, like in GenBank: a feature from 1 to 3
+    covers the first three bases. start is the left end and end the right end on both strands; start > end means the
+    feature wraps around the origin of a circular contig.
+    """
+    id: Union[ProteinID, PseudoID]
+    start: int
+    end: int
+    strand: Literal["+", "-"]
+    protein_family: Optional[FamilyID] = None
+    category: Optional[Category] = None
+    label: Optional[str] = None
+
+    def __post_init__(self):
+        if self.start < 1 or self.end < 1:
+            raise ValueError(f"Feature {self.id} start and end positions must be positive, but runs from {self.start} to {self.end}.")
+
+    @property
+    def wraps(self) -> bool:
+        return self.start > self.end
+
+
 @dataclass(kw_only=True)
 class Contig:
+    """
+    A contig and its features. Coordinates are 1-based and inclusive, like in GenBank: a whole contig runs from 1 to
+    its length, and a slice keeps the coordinates of the contig it was cut from.
+    """
     id: ContigID
     start: int
     end: int
@@ -89,14 +106,23 @@ class Contig:
     features: List[Feature]
     regions: Optional[List[Region]] = None
     category: Optional[Category] = None
+    label: Optional[str] = None
 
     def __post_init__(self):
         if self.start < 1 or self.end < 1:
             raise ValueError(f"Contig {self.id} start and end positions must be positive.")
         if self.start > self.end:
             raise ValueError(f"Contig {self.id} must start before it ends, but runs from {self.start} to {self.end}.")
+        outside = [
+            feature for feature in self.features
+            if not (self.start <= feature.start <= self.end and self.start <= feature.end <= self.end)
+        ]
         if self.topology == "linear" and any(feature.wraps for feature in self.features):
             raise ValueError(f"Linear contig {self.id} cannot have features that wrap around the origin.")
+        if outside:
+            raise ValueError(
+                f"Contig {self.id} runs from {self.start} to {self.end}, but {len(outside)} of its features lie outside it, e.g. {outside[0].id} from {outside[0].start} to {outside[0].end}."
+            )
 
     @property
     def length(self) -> int:
@@ -104,10 +130,7 @@ class Contig:
 
     def slice(self, start: int, end: int) -> PartialContig:
         """
-        Cut out the block from start to end as a linear contig, keeping the original coordinates. Features entirely
-        inside the block are kept and features entirely outside it are dropped. Features that cross a border of the
-        block are dropped with a warning and kept in border_features. Features that wrap around the origin of a
-        circular contig are cut by the origin, so they count as border features whenever they overlap the block.
+        Cut out the specified block from this contig as a linear contig. Original coordinates are preserved, and features that cross a border of the block are treated as border features. For now the block must not cross the origin of a circular contig.
         Args:
             start (int): The start of the block, at or after the start of this contig.
             end (int): The end of the block, at or after start and at or before the end of this contig.
@@ -142,13 +165,11 @@ class Contig:
             features=features,
             regions=[region for region in self.regions if start <= region.start <= region.end <= end] if self.regions is not None else None,
             category=self.category,
+            label=f"{self.label} ({start}-{end})" if self.label is not None else None,
             border_features=border_features,
         )
         if border_features:
-            logger.warning(
-                f"Dropped {len(border_features)} features of contig {self.id} that cross the borders of {partial.id}: "
-                + ", ".join(str(feature.id) for feature in border_features)
-            )
+            logger.warning(f"Contig {self.id} has {len(border_features)} features that are partially overlapping with the start ({start}) or end ({end}) coordinates and are treated as border features.")
         return partial
 
 @dataclass(kw_only=True)

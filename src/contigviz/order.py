@@ -1,6 +1,5 @@
 import numpy as np
 from typing import List
-
 from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, optimal_leaf_ordering, leaves_list
 

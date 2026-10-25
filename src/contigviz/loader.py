@@ -13,7 +13,7 @@ class ContigLoader:
         Fetch a contig and its features from the database.
         Args:
             contig_id (ContigID): The ID of the contig to fetch.
-            topology (Literal["linear", "circular"]): The topology of the contig. Defaults to "circular".
+            topology (Literal["linear", "circular"]): The topology of the contig (default = "circular").
         Returns:
             Contig: The contig object with its features populated.
         Raises:
@@ -26,12 +26,21 @@ class ContigLoader:
         )
         if not rows:
             raise ValueError(f"Contig '{contig_id}' not found in database '{self.database.name}'.")
+        length = int(rows[0]["length"])
+        if length < 1:
+            raise ValueError(f"Contig '{contig_id}' has length {length} in database '{self.database.name}'.")
+        features = self.fetch_features(contig_id)
+        if topology == "circular":
+            # Some databases, e.g. ESKAPEE25, store a feature that wraps around the origin as running past the end of the contig. Counting on from 1 after the end turns it into start > end; positions inside the contig stay.
+            for feature in features:
+                feature.start = (feature.start - 1) % length + 1
+                feature.end = (feature.end - 1) % length + 1
         return Contig(
             id=contig_id,
             start=1,
-            end=int(rows[0]["length"]),
+            end=length,
             topology=topology,
-            features=self.fetch_features(contig_id),
+            features=features,
         )
 
     def fetch_features(self, contig_id: ContigID) -> List[Feature]:
