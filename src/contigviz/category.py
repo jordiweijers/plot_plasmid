@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, FrozenSet, Iterable, Optional, Sequence, Set, Tuple, Type, Union
 
-from plot_plasmid.cache import load_ids, read_ids
-from plot_plasmid.database import Database
-from plot_plasmid.models import ID_CLASSES, Category, Contig, ContigID, FamilyID, Feature, ProteinID, PseudoID
+from contigviz.cache import load_ids, read_ids
+from contigviz.database import Database
+from contigviz.models import ID_CLASSES, Category, Contig, ContigID, FamilyID, Feature, ProteinID, PseudoID
 
 logger = logging.getLogger(__name__)
 

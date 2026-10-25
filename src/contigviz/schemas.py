@@ -1,5 +1,5 @@
 """
-The schemas of the databases of our group, ready to use: from plot_plasmid.schemas import kes2021.
+The schemas of the databases of our group, ready to use: from contigviz.schemas import kes2021.
 
 To add a database, copy one of the schemas below and change the names; SCHEMAS picks it up by itself. To connect to a
 schema as another user or on another host, copy it with dataclasses.replace(kes2021, host=..., user=...).

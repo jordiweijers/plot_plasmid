@@ -3,9 +3,10 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "plot_plasmid"
+# Installed as dagan-contigviz, imported as contigviz.
+name = "dagan-contigviz"
 version = "0.1.0"
-description = "Plot plasmid contigs from a MySQL database, colored by category and linked by MCL protein family."
+description = "Load contigs and their features from the Dagan lab databases, assign categories to them and plot them with pygenomeviz."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "jordiweijers" }]
@@ -14,17 +15,11 @@ dependencies = [
     "mysql-connector-python>=8.0",
     "numpy>=1.21",
     "pygenomeviz>=1.0",
-    "PyYAML>=5.1",
     "scipy>=1.7",
 ]
-
-[project.scripts]
-plot-plasmid = "plot_plasmid.main:main"
 
 [project.urls]
 Repository = "https://github.com/jordiweijers/plot_plasmid"
 
-[tool.setuptools]
-# The code lives in bin/ but is imported as plot_plasmid.
-package-dir = { "plot_plasmid" = "bin" }
-packages = ["plot_plasmid"]
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 import mysql.connector
 from mysql.connector.constants import ClientFlag
 
-from plot_plasmid.schemas import DatabaseSchema
+from contigviz.schemas import DatabaseSchema
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from pygenomeviz import GenomeViz
 from pygenomeviz.track import FeatureTrack
 
-from plot_plasmid.models import Category, Contig, ContigID, FamilyID, Feature, PseudoID
+from contigviz.models import Category, Contig, ContigID, FamilyID, Feature, PseudoID
 
 DEF_COLOR = "#ff8800"
 WRAP_COLOR = "#ff0000"

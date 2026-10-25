@@ -8,7 +8,7 @@ from typing import Iterable, Optional, Set, Tuple, Dict
 
 import mysql.connector
 
-from plot_plasmid.database import Database
+from contigviz.database import Database
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 

@@ -1,7 +1,7 @@
 from typing import Literal, List
 
-from plot_plasmid.database import Database
-from plot_plasmid.models import Contig, ContigID, Feature, FamilyID, ProteinID, PseudoID
+from contigviz.database import Database
+from contigviz.models import Contig, ContigID, Feature, FamilyID, ProteinID, PseudoID
 
 
 class ContigLoader:

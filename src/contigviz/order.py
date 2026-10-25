@@ -4,7 +4,7 @@ from typing import List
 from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, optimal_leaf_ordering, leaves_list
 
-from plot_plasmid.models import Contig
+from contigviz.models import Contig
 
 
 def compute_presence_matrix(contigs: List[Contig]) -> np.ndarray:
