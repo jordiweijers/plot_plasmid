@@ -2,6 +2,7 @@ from typing import Dict, Iterator, List, Tuple, Optional
 from pathlib import Path
 from matplotlib.figure import Figure
 import matplotlib.patches as mpatches
+from matplotlib.colors import is_color_like
 from pygenomeviz import GenomeViz
 
 from contigviz.models import Contig, FamilyID, Feature, PartialContig, PseudoID
@@ -81,6 +82,8 @@ def plot_contigs(contigs: List[Contig], output_path: Optional[Path] = None, defa
     Returns:
         Figure: The matplotlib Figure object containing the plotted contigs.
     """
+    if not is_color_like(default_color):
+        raise ValueError(f"Invalid default color: {default_color}")
     gv = GenomeViz(track_align_type="center")
     gv.set_scale_bar(ymargin=0.5)
 

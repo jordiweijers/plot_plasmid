@@ -17,7 +17,7 @@ class ContigLoader:
         Returns:
             Contig: The contig object with its features populated.
         Raises:
-            ValueError: If the contig is not found in the database.
+            ValueError: If the contig is not found in the database. And the contig has an invalid length.
         """
         source = self.database.schema.contigs
         rows = self.database.query(
