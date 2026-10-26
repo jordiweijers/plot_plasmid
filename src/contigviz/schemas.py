@@ -91,12 +91,10 @@ ESKAPEE25 = DatabaseSchema(
     contigs=ContigSource(table="contigs", id_column="contig_id", length_column="size"),
     features=[
         FeatureSource(
-            table="proteins", id_column="id", contig_column="contig_id", is_pseudo="FALSE",
-            mcl_table="mcl", mcl_id_column="id", mcl_family_column="clust",
+            table="proteins", id_column="id", contig_column="contig_id", is_pseudo="FALSE", mcl_table="mcl", mcl_id_column="id", mcl_family_column="clust",
         ),
         FeatureSource(
-            table="pseudogenes", id_column="pseudo_id", contig_column="contig_id", is_pseudo="TRUE",
-            mcl_table="pmcl", mcl_id_column="pseudo_id", mcl_family_column="clust",
+            table="pseudogenes", id_column="pseudo_id", contig_column="contig_id", is_pseudo="TRUE", mcl_table="pmcl", mcl_id_column="pseudo_id", mcl_family_column="clust",
         ),
     ],
 )
@@ -108,8 +106,7 @@ acinetobacter_2023 = DatabaseSchema(
     contigs=ContigSource(table="contigs", id_column="contig_ID", length_column="Size"),
     features=[
         FeatureSource(
-            table="proteins", id_column="id", contig_column="contig_ID", is_pseudo="FALSE",
-            mcl_table="mcl30", mcl_id_column="id", mcl_family_column="clust",
+            table="proteins", id_column="id", contig_column="contig_ID", is_pseudo="FALSE", mcl_table="mcl30", mcl_id_column="id", mcl_family_column="clust",
         ),
     ],
 )
@@ -121,9 +118,7 @@ pantoea2025_v2 = DatabaseSchema(
     contigs=ContigSource(table="contigs", id_column="contig_id", length_column="contig_length"),
     features=[
         FeatureSource(
-            table="features_cds", id_column="cds_id", contig_column="contig_id",
-            is_pseudo="FIND_IN_SET('pseudo', REPLACE(attributes, ';', ',')) > 0",
-            mcl_table="mcls", mcl_id_column="cds_id", mcl_family_column="mcl_id",
+            table="features_cds", id_column="cds_id", contig_column="contig_id", is_pseudo="FIND_IN_SET('pseudo', REPLACE(attributes, ';', ',')) > 0", mcl_table="mcls", mcl_id_column="cds_id", mcl_family_column="mcl_id",
         ),
     ],
 )
