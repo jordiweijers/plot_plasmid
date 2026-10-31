@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # Installed as dagan-contigviz, imported as contigviz.
 name = "dagan-contigviz"
-version = "0.1.0"
+version = "0.2.0"
 description = "Load contigs and their features from the Dagan lab databases, assign categories to them and plot them with pygenomeviz."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,7 +23,7 @@ dependencies = [
 plot-contigs = "contigviz.cli.plot_contigs:main"
 
 [project.urls]
-Repository = "https://github.com/jordiweijers/plot_plasmid"
+Repository = "https://github.com/jordiweijers/contigviz"
 
 [tool.setuptools.packages.find]
 where = ["src"]

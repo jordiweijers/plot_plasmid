@@ -23,7 +23,7 @@ Requires Python 3.11 or newer and an account on the HPC. Install it in a virtual
 ```bash
 python3 -m venv ~/venvs/contigviz
 source ~/venvs/contigviz/bin/activate
-pip install git+https://github.com/jordiweijers/plot_plasmid.git
+pip install git+https://github.com/jordiweijers/contigviz.git
 plot-contigs -h
 ```
 
@@ -40,7 +40,7 @@ plot-contigs -d kes2021 -c 1991 2082 4338 -o hybrid.svg
 To color the AMR genes, download the example query [`examples/amr_proteins.sql`](examples/amr_proteins.sql) and give it as a category:
 
 ```bash
-curl -O https://raw.githubusercontent.com/jordiweijers/plot_plasmid/main/examples/amr_proteins.sql
+curl -O https://raw.githubusercontent.com/jordiweijers/contigviz/main/examples/amr_proteins.sql
 plot-contigs -d kes2021 -c 1991 2082 4338 -o hybrid_amr.svg \
     --category amr_proteins.sql --id-type protein --label AMR --color "#33ffff" --cache amr_proteins.txt
 ```
@@ -94,7 +94,7 @@ With the API you can combine as many categories as you like. Below, the hybrid p
 
 ```bash
 for file in plot_categories.py replication_families.txt amr_proteins.sql; do
-    curl -O https://raw.githubusercontent.com/jordiweijers/plot_plasmid/main/examples/$file
+    curl -O https://raw.githubusercontent.com/jordiweijers/contigviz/main/examples/$file
 done
 ```
 
