@@ -18,6 +18,10 @@ dependencies = [
     "scipy>=1.7",
 ]
 
+# The commands that pip puts on the PATH; each runs the main() of its module.
+[project.scripts]
+plot-contigs = "contigviz.cli.plot_contigs:main"
+
 [project.urls]
 Repository = "https://github.com/jordiweijers/plot_plasmid"
 

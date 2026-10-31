@@ -8,9 +8,9 @@ __version__ = version("dagan-contigviz")
 # The module each export lives in. It is only imported when the export is first used, so e.g. importing contigviz.models does not load pygenomeviz, scipy and the mysql connector.
 _EXPORTS = {
     "CategoryRule": "contigviz.category",
-    "assign_categories": "contigviz.category",
+    "assign_category": "contigviz.category",
     "Database": "contigviz.database",
-    "ContigLoader": "contigviz.loader",
+    "fetch_contig": "contigviz.loader",
     "Category": "contigviz.models",
     "Contig": "contigviz.models",
     "ContigID": "contigviz.models",
@@ -37,9 +37,9 @@ def __getattr__(name: str):
 
 
 if TYPE_CHECKING:  # never true when running, but lets IDEs and type checkers see the exports
-    from contigviz.category import CategoryRule, assign_categories
+    from contigviz.category import CategoryRule, assign_category
     from contigviz.database import Database
-    from contigviz.loader import ContigLoader
+    from contigviz.loader import fetch_contig
     from contigviz.models import (
         Category, Contig, ContigID, FamilyID, Feature, PartialContig, PartialContigID, ProteinID, PseudoID, Region,
     )
