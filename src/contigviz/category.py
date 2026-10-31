@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import FrozenSet, Iterable, Optional, Type, Union
+from typing import Collection, Iterable, Optional, Type, Union
 
 from contigviz.cache import load_ids, read_ids
 from contigviz.database import Database
@@ -16,10 +16,10 @@ class CategoryRule:
     Assigns a category to the contigs and features with the given IDs. To get the IDs from an SQL query, make the rule with CategoryRule.from_query, and from a file with CategoryRule.from_file.
     Attributes:
         category (Category): The category to assign. Several rules can share one category.
-        ids (FrozenSet[Union[ProteinID, PseudoID, ContigID, FamilyID]]): The IDs, which may be of different kinds: a ProteinID or PseudoID matches a feature, a FamilyID every feature in that protein family, and a ContigID a contig. A list or set is turned into a frozenset, so looking up an ID stays fast.
+        ids (Collection[Union[ProteinID, PseudoID, ContigID, FamilyID]]): The IDs, which may be of different kinds: a ProteinID or PseudoID matches a feature, a FamilyID every feature in that protein family, and a ContigID a contig. A list or set is turned into a frozenset, so looking up an ID stays fast.
     """
     category: Category
-    ids: FrozenSet[Union[ProteinID, PseudoID, ContigID, FamilyID]]
+    ids: Collection[Union[ProteinID, PseudoID, ContigID, FamilyID]]
 
     def __post_init__(self):
         # A frozen dataclass can only set its fields through object.__setattr__.

@@ -6,6 +6,7 @@
 
 ## Package
 
+- [ ] Make it so that `CategoryRule.from_file()`, `CategoryRule.from_query()`, and `plot_contigs()` take pure strings for the paths as well as Path objects.
 - [ ] `plot.py`: a feature that wraps around the origin gets an arrowhead on both parts; it should only get one, at the end it points to.
 - [ ] `plot.py`: give a clear error when two contigs get the same track name (pygenomeviz raises a ValueError).
 - [ ] Load feature and contig labels from the database.

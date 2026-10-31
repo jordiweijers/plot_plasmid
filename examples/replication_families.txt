@@ -1,0 +1,33 @@
+# MCL families (mcl30) in kes2021 whose most common protein name contains "replication initiat".
+# One family ID per line; lines starting with # are skipped, so use it with --id-type family.
+10849
+12577
+13639
+14864
+1584
+16474
+16898
+19759
+19997
+20057
+20100
+20253
+20503
+22679
+23648
+24854
+29816
+30178
+3043
+30890
+31079
+32133
+4716
+59
+6268
+653
+6954
+7573
+8162
+8329
+9175
