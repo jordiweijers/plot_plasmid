@@ -31,7 +31,6 @@ def setup_logging(log_file: Path) -> None:
     console_handler.setFormatter(logging.Formatter("%(message)s"))
     file_handler = logging.FileHandler(log_file, mode="a")
     file_handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)-8s %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
-    # The handlers go on the root logger, which the messages of every logger reach, also those of contigviz.
     logging.basicConfig(level=logging.WARNING, handlers=[console_handler, file_handler])
     for name in (__name__, "contigviz"):
         logging.getLogger(name).setLevel(logging.DEBUG)
@@ -57,6 +56,7 @@ def build_rules(database: Database, cache_dir: Optional[Path] = None, refresh: b
         rules.append(CategoryRule.from_query(database, category, id_class, query_path.read_text(), cache, refresh))
     return rules
 
+
 def read_contig_file(path: Path) -> List[str]:
     """
     Read contig IDs from a file.
@@ -72,6 +72,7 @@ def read_contig_file(path: Path) -> List[str]:
             if contig_id:
                 contig_ids.append(contig_id)
     return contig_ids
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Plot contigs from one database with pygenomeviz, colored by the AMR, replication and conjugation categories of that database")
@@ -115,18 +116,17 @@ def main():
     contig_ids = read_contig_file(args.contig_file) if args.contig_file else args.contig_ids
     cache_dir = None if args.no_cache else args.cache_dir
 
-    # ---------- Load the contigs and assign their categories ----------
+    # ---------- Load the contigs and build category rules ----------
     with Database(SCHEMAS[args.database]) as database:
         rules = build_rules(database, cache_dir, args.refresh_cache)
         loader = ContigLoader(database)
         contigs = [loader.fetch_contig(ContigID(contig_id)) for contig_id in contig_ids]
+
+    # ---------- Assign categories to contigs ----------
     assign_categories(contigs, rules)
     for contig in contigs:
         category_counts = Counter(feature.category.label for feature in contig.features if feature.category is not None)
-        logger.info(
-            f"Loaded contig {contig.id} from {args.database}: {contig.length} bp, {len(contig.features)} features"
-            + "".join(f", {count} {label}" for label, count in category_counts.items())
-        )
+        logger.info(f"Loaded contig {contig.id} from {args.database}: {contig.length} bp, {len(contig.features)} features" + "".join(f", {count} {label}" for label, count in category_counts.items()))
 
     # ---------- Order contigs ----------
     if args.order_by_similarity:
