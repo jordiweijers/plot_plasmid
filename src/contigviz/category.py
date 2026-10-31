@@ -1,12 +1,11 @@
 import logging
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, FrozenSet, Iterable, Optional, Sequence, Set, Tuple, Type, Union
+from typing import FrozenSet, Iterable, Optional, Type, Union
 
 from contigviz.cache import load_ids, read_ids
 from contigviz.database import Database
-from contigviz.models import ID_CLASSES, Category, Contig, ContigID, FamilyID, Feature, ProteinID, PseudoID
+from contigviz.models import ID_CLASSES, Category, Contig, ContigID, FamilyID, ProteinID, PseudoID
 
 logger = logging.getLogger(__name__)
 
@@ -99,49 +98,24 @@ class CategoryRule:
         return rule
 
 
-def assign_categories(contigs: Iterable[Contig], rules: Sequence[CategoryRule]) -> None:
+def assign_category(contigs: Iterable[Contig], rule: CategoryRule) -> None:
     """
-    Set the category of each contig and feature that a rule matches; the first matching rule wins. Contigs and features that no rule matches keep their category. When a later rule with another category also matches, one warning per pair of categories is logged.
+    Set the category of contigs and features according to the rule. If a contig or a feature already has a category, it will be overwritten with a warning.
     Args:
         contigs (Iterable[Contig]): The contigs, changed in place. Assign before slicing, so blocks keep the categories.
-        rules (Sequence[CategoryRule]): The rules, in priority order.
+        rule (CategoryRule): The rule to assign.
     """
-    conflicts: Dict[Tuple[Category, Category], Set[Union[ProteinID, PseudoID, FamilyID, ContigID]]] = defaultdict(set)
+    overwritten = []
     for contig in contigs:
-        _assign(contig, (contig.id,), rules, conflicts)
-        for feature in contig.features:
-            _assign(feature, (feature.id, feature.protein_family), rules, conflicts)
-    for (winner, loser), ids in conflicts.items():
-        examples = ", ".join(str(id) for id in sorted(ids, key=str)[:5])
-        # Categories with the same label differ in color, so show it to tell them apart.
-        first, second = (f"'{c.label}' ({c.color})" if winner.label == loser.label else f"'{c.label}'" for c in (winner, loser))
+        items = [(contig, (contig.id,))] + [(feature, (feature.id, feature.protein_family)) for feature in contig.features]
+        for item, keys in items:
+            if any(key in rule.ids for key in keys):
+                if item.category is not None and item.category != rule.category:
+                    overwritten.append(f"{item.id} ({item.category.label})")
+                item.category = rule.category
+    if overwritten:
         logger.warning(
-            f"{len(ids)} contigs or features match both {first} and {second}; kept {first}, which comes first: "
-            f"{examples}{', ...' if len(ids) > 5 else ''}"
+            f"Category '{rule.category.label}' overwrote the category of {len(overwritten)} contigs or features: "
+            f"{', '.join(overwritten[:5])}{', ...' if len(overwritten) > 5 else ''}"
         )
-
-
-def _assign(
-        item: Union[Contig, Feature],
-        keys: Tuple[Optional[Union[ProteinID, PseudoID, FamilyID, ContigID]], ...],
-        rules: Sequence[CategoryRule],
-        conflicts: Dict[Tuple[Category, Category], Set[Union[ProteinID, PseudoID, FamilyID, ContigID]]],
-    ) -> None:
-    """
-    Set the category of one contig or feature to that of the first rule whose IDs contain one of its keys.
-    Args:
-        item (Union[Contig, Feature]): The contig or feature, changed in place.
-        keys (Tuple[Optional[Union[ProteinID, PseudoID, FamilyID, ContigID]], ...]): Its IDs to look up: a contig's ID, or a feature's ID and protein family.
-        rules (Sequence[CategoryRule]): The rules, in priority order.
-        conflicts (Dict[Tuple[Category, Category], Set[Union[ProteinID, PseudoID, FamilyID, ContigID]]]): The conflicts found so far, by pair of categories; added to.
-    """
-    winner = None
-    for rule in rules:
-        if any(key in rule.ids for key in keys):
-            if winner is None:
-                winner = rule.category
-            elif rule.category != winner:
-                conflicts[(winner, rule.category)].add(item.id)
-    if winner is not None:
-        item.category = winner
 
